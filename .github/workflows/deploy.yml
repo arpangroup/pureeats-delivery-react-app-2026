@@ -18,7 +18,7 @@ env:
   # No /html suffix here (unlike the customer/admin apps' .../html) — this
   # path is already provisioned on the server exactly as given, as its own
   # document root.
-  DEPLOY_PATH: /var/www/driver.pureeats.in
+  DEPLOY_PATH: /var/www/driver.pureeats.in/html
 
 jobs:
   build-and-deploy:
