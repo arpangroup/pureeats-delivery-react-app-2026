@@ -1,0 +1,74 @@
+name: Deploy delivery partner app
+
+# Builds the Vite app and rsyncs the static output to the delivery-partner
+# web root on the PureEats server (see setup-server.sh in the server-setup
+# repo for how that server/user was provisioned). Mirrors the customer and
+# admin apps' own deploy.yml — same server, same deploy user, same secrets.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: {}
+
+concurrency:
+  group: deploy-delivery-app
+  cancel-in-progress: true
+
+env:
+  DEPLOY_USER: pureeats-deploy
+  # No /html suffix here (unlike the customer/admin apps' .../html) — this
+  # path is already provisioned on the server exactly as given, as its own
+  # document root.
+  DEPLOY_PATH: /var/www/driver.pureeats.in
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+        env:
+          # Unset -> defaults to VITE_DATA_SOURCE=mock (see src/config/env.ts),
+          # so the deployed build is self-contained and needs no backend.
+          # Fill these in as repo/org secrets once the real Firebase project
+          # values and a production API URL are ready; optional until then.
+          VITE_DATA_SOURCE: ${{ secrets.VITE_DATA_SOURCE }}
+          VITE_API_BASE_URL: ${{ secrets.VITE_API_BASE_URL }}
+          VITE_FIREBASE_API_KEY: ${{ secrets.VITE_FIREBASE_API_KEY }}
+          VITE_FIREBASE_AUTH_DOMAIN: ${{ secrets.VITE_FIREBASE_AUTH_DOMAIN }}
+          VITE_FIREBASE_PROJECT_ID: ${{ secrets.VITE_FIREBASE_PROJECT_ID }}
+          VITE_FIREBASE_STORAGE_BUCKET: ${{ secrets.VITE_FIREBASE_STORAGE_BUCKET }}
+          VITE_FIREBASE_MESSAGING_SENDER_ID: ${{ secrets.VITE_FIREBASE_MESSAGING_SENDER_ID }}
+          VITE_FIREBASE_APP_ID: ${{ secrets.VITE_FIREBASE_APP_ID }}
+          VITE_FIREBASE_VAPID_KEY: ${{ secrets.VITE_FIREBASE_VAPID_KEY }}
+
+      - name: Configure SSH agent
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.DEPLOY_SSH_KEY }}
+
+      - name: Trust server host key
+        run: |
+          mkdir -p ~/.ssh
+          ssh-keyscan -H "${{ secrets.DEPLOY_HOST }}" >> ~/.ssh/known_hosts
+
+      - name: Deploy dist/ to server
+        run: |
+          rsync -avz --delete \
+            dist/ "${DEPLOY_USER}@${{ secrets.DEPLOY_HOST }}:${DEPLOY_PATH}/"
+
+      - name: Reload Apache
+        run: |
+          ssh "${DEPLOY_USER}@${{ secrets.DEPLOY_HOST }}" \
+            'sudo /bin/systemctl reload apache2'

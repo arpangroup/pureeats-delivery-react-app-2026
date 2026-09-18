@@ -1,0 +1,17 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "delivery-app-mock",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev"],
+      "port": 5373
+    },
+    {
+      "name": "delivery-app-uat",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev:uat"],
+      "port": 5373
+    }
+  ]
+}

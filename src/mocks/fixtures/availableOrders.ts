@@ -1,0 +1,80 @@
+import type { AvailableOrder } from '@/types/entities'
+
+/**
+ * Static templates for the "new order" pool the mock deliveryOrderService rotates through -
+ * `createdAt` is stamped fresh by the service each time a template becomes visible, so orders
+ * always look like they just came in. Bangalore-area restaurant/customer pairs, distances
+ * 0.8-4.5km, payouts Rs.35-75 per the spec.
+ */
+export const availableOrderTemplates: Omit<AvailableOrder, 'createdAt'>[] = [
+  {
+    id: 9101,
+    uniqueOrderId: 'PE-2026-009101',
+    restaurantName: 'Meghana Foods - Indiranagar',
+    restaurantAddress: '100 Feet Road, Indiranagar, Bengaluru',
+    restaurantLat: 12.9784,
+    restaurantLng: 77.6408,
+    customerAddress: '5th Cross, Domlur, Bengaluru',
+    customerLat: 12.961,
+    customerLng: 77.6387,
+    distanceKm: 2.1,
+    payoutEstimate: 55,
+    itemsCount: 3,
+  },
+  {
+    id: 9102,
+    uniqueOrderId: 'PE-2026-009102',
+    restaurantName: 'Truffles - Koramangala',
+    restaurantAddress: '80 Feet Road, Koramangala, Bengaluru',
+    restaurantLat: 12.9352,
+    restaurantLng: 77.6146,
+    customerAddress: 'Sector 2, HSR Layout, Bengaluru',
+    customerLat: 12.9116,
+    customerLng: 77.6412,
+    distanceKm: 3.8,
+    payoutEstimate: 68,
+    itemsCount: 4,
+  },
+  {
+    id: 9103,
+    uniqueOrderId: 'PE-2026-009103',
+    restaurantName: 'Empire Restaurant - Church Street',
+    restaurantAddress: 'Church Street, Bengaluru',
+    restaurantLat: 12.9758,
+    restaurantLng: 77.6045,
+    customerAddress: 'MG Road, Bengaluru',
+    customerLat: 12.9756,
+    customerLng: 77.6068,
+    distanceKm: 0.8,
+    payoutEstimate: 38,
+    itemsCount: 2,
+  },
+  {
+    id: 9104,
+    uniqueOrderId: 'PE-2026-009104',
+    restaurantName: 'Nagarjuna - Residency Road',
+    restaurantAddress: 'Residency Road, Bengaluru',
+    restaurantLat: 12.9698,
+    restaurantLng: 77.606,
+    customerAddress: 'Richmond Town, Bengaluru',
+    customerLat: 12.9635,
+    customerLng: 77.6083,
+    distanceKm: 1.4,
+    payoutEstimate: 42,
+    itemsCount: 2,
+  },
+  {
+    id: 9105,
+    uniqueOrderId: 'PE-2026-009105',
+    restaurantName: 'Only Parathas - Whitefield',
+    restaurantAddress: 'ITPL Main Road, Whitefield, Bengaluru',
+    restaurantLat: 12.9698,
+    restaurantLng: 77.75,
+    customerAddress: 'Brookefield, Bengaluru',
+    customerLat: 12.9698,
+    customerLng: 77.715,
+    distanceKm: 4.5,
+    payoutEstimate: 75,
+    itemsCount: 5,
+  },
+]
