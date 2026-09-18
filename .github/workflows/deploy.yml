@@ -39,12 +39,11 @@ jobs:
       - name: Build
         run: npm run build
         env:
-          # Unset -> defaults to VITE_DATA_SOURCE=mock (see src/config/env.ts),
-          # so the deployed build is self-contained and needs no backend.
-          # Fill these in as repo/org secrets once the real Firebase project
-          # values and a production API URL are ready; optional until then.
-          VITE_DATA_SOURCE: ${{ secrets.VITE_DATA_SOURCE }}
-          VITE_API_BASE_URL: ${{ secrets.VITE_API_BASE_URL }}
+          # VITE_DATA_SOURCE / VITE_API_BASE_URL are deliberately NOT set here — Vite gives a
+          # real (even empty-string) process.env value priority over .env.production, so setting
+          # them from unset secrets would silently force mock mode no matter what .env.production
+          # says. .env.production (committed, VITE_DATA_SOURCE=live) is the single source of
+          # truth for this build; only genuinely secret/optional values belong in this env block.
           VITE_FIREBASE_API_KEY: ${{ secrets.VITE_FIREBASE_API_KEY }}
           VITE_FIREBASE_AUTH_DOMAIN: ${{ secrets.VITE_FIREBASE_AUTH_DOMAIN }}
           VITE_FIREBASE_PROJECT_ID: ${{ secrets.VITE_FIREBASE_PROJECT_ID }}
