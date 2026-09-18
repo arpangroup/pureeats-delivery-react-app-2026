@@ -57,34 +57,52 @@ export const riderProfileService = {
       }
       return profile
     }
-    const formData = new FormData()
-    if (payload.name) formData.append('name', payload.name)
-    formData.append('vehicleNumber', payload.vehicleNumber)
-    if (payload.age != null) formData.append('age', String(payload.age))
-    if (payload.gender) formData.append('gender', payload.gender)
-    formData.append('description', payload.description)
-    if (payload.photo) formData.append('photo', payload.photo)
-    const { data } = await apiClient.post<{ data: RiderProfile }>('/users/me/rider-profile', formData)
+    // Plain JSON - the backend's RiderProfileRequest carries no photo field, since a photo is a
+    // file, not JSON (see uploadPhoto below). Onboarding still lets the rider pick a photo in the
+    // same form for a smooth UX, so if one was chosen, upload it as a second call right after the
+    // profile itself is created.
+    const { data } = await apiClient.post<{ data: RiderProfile }>('/users/me/rider-profile', {
+      name: payload.name,
+      vehicleNumber: payload.vehicleNumber,
+      age: payload.age != null ? String(payload.age) : null,
+      gender: payload.gender,
+      description: payload.description,
+    })
+    if (payload.photo) return riderProfileService.uploadPhoto(payload.photo)
     return data.data
   },
 
-  /** Profile edits after onboarding. NOTE: the backend does not yet confirm a dedicated
-   * PATCH/PUT for rider-profile updates - this re-POSTs to the same upsert endpoint as
-   * createProfile, which the backend team has indicated is idempotent today. Revisit once a real
-   * update endpoint is confirmed. */
+  /** Partial update of the rider's own profile fields, post-onboarding - PUT to the same
+   * resource, distinct from createProfile's POST (which the backend rejects once a profile
+   * already exists). Photo, again, goes through uploadPhoto separately if one was picked. */
   async updateProfile(userId: number, payload: RiderProfileInput): Promise<RiderProfile> {
     if (IS_MOCK) {
-      await mockDelay()
+      // createProfile's mock branch already upserts (no "already exists" rejection like the real
+      // backend), and already turns payload.photo into an object-URL preview itself - reuse it
+      // as-is rather than routing through the live-only uploadPhoto split.
       return riderProfileService.createProfile(userId, payload)
     }
+    const { data } = await apiClient.put<{ data: RiderProfile }>('/users/me/rider-profile', {
+      name: payload.name,
+      vehicleNumber: payload.vehicleNumber,
+      age: payload.age != null ? String(payload.age) : null,
+      gender: payload.gender,
+      description: payload.description,
+    })
+    if (payload.photo) return riderProfileService.uploadPhoto(payload.photo)
+    return data.data
+  },
+
+  /** Separate multipart action, mirroring the customer app's own profile-photo upload - a file is
+   * never smuggled into a JSON profile-fields request. */
+  async uploadPhoto(file: File): Promise<RiderProfile> {
+    if (IS_MOCK) {
+      await mockDelay()
+      throw { message: 'uploadPhoto should not be called directly in mock mode - createProfile/updateProfile handle the mock photo preview themselves.' }
+    }
     const formData = new FormData()
-    if (payload.name) formData.append('name', payload.name)
-    formData.append('vehicleNumber', payload.vehicleNumber)
-    if (payload.age != null) formData.append('age', String(payload.age))
-    if (payload.gender) formData.append('gender', payload.gender)
-    formData.append('description', payload.description)
-    if (payload.photo) formData.append('photo', payload.photo)
-    const { data } = await apiClient.post<{ data: RiderProfile }>('/users/me/rider-profile', formData)
+    formData.append('file', file)
+    const { data } = await apiClient.post<{ data: RiderProfile }>('/users/me/rider-profile/photo', formData)
     return data.data
   },
 }
