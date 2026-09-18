@@ -72,4 +72,3 @@ jobs:
         run: |
           ssh "${DEPLOY_USER}@${{ secrets.DEPLOY_HOST }}" \
             'sudo /bin/systemctl reload apache2'
-
