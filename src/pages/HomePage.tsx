@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Power, ListChecks, Bike, Wallet as WalletIcon, Star } from 'lucide-react'
+import { Power, ListChecks, Bike, Wallet as WalletIcon, Star, Wrench } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
 import { useOnlineStatus } from '@/hooks/useOnlineStatus'
 import { useLocationReporting } from '@/hooks/useLocationReporting'
+import { usePlatformSettings } from '@/hooks/usePlatformSettings'
 import { useAvailableOrdersPolling } from '@/hooks/useAvailableOrdersPolling'
 import { deliveryOrderService } from '@/services/deliveryOrderService'
 import { riderProfileService } from '@/services/riderProfileService'
@@ -15,7 +16,8 @@ import type { ActiveDelivery, RiderProfile } from '@/types/entities'
 export default function HomePage() {
   const { user } = useAuth()
   const { isOnline, isSaving, toggle } = useOnlineStatus()
-  const { lastPosition, permissionState, error: locationError } = useLocationReporting(isOnline)
+  const { locationTrackingEnabled, loaded: platformSettingsLoaded } = usePlatformSettings()
+  const { lastPosition, permissionState, error: locationError } = useLocationReporting(isOnline, locationTrackingEnabled)
   const [activeDelivery, setActiveDelivery] = useState<ActiveDelivery | null>(null)
   const [profile, setProfile] = useState<RiderProfile | null>(null)
   const [balance, setBalance] = useState<number | null>(null)
@@ -51,35 +53,49 @@ export default function HomePage() {
 
       {/* The most visible instantiation of the online/offline requirement - deliberately not buried in settings. */}
       <div className="mx-4 mb-4">
-        <button
-          onClick={toggle}
-          disabled={isSaving || !!activeDelivery}
-          className={`flex w-full items-center justify-between rounded-2xl p-4 text-left shadow-card transition-colors ${
-            isOnline ? 'bg-brand-600 text-white' : 'bg-white text-slate-800 dark:bg-slate-900 dark:text-slate-100'
-          } disabled:cursor-not-allowed disabled:opacity-80`}
-        >
-          <div className="min-w-0">
-            <p className="text-base font-bold">{isOnline ? "You're online" : "You're offline"}</p>
-            <p className={`mt-0.5 truncate text-xs ${isOnline ? 'text-white/80' : 'text-slate-500 dark:text-slate-400'}`}>
-              {activeDelivery
-                ? 'Finish your current delivery to go offline'
-                : isOnline
-                  ? lastPosition
-                    ? `Sending your location - ${lastPosition.latitude.toFixed(4)}, ${lastPosition.longitude.toFixed(4)}`
-                    : 'Sending your location...'
-                  : 'Go online to start receiving orders'}
-            </p>
+        {platformSettingsLoaded && !locationTrackingEnabled ? (
+          <div className="flex w-full items-center gap-3 rounded-2xl bg-amber-50 p-4 shadow-card dark:bg-amber-500/10">
+            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-400">
+              <Wrench size={20} />
+            </span>
+            <div className="min-w-0">
+              <p className="text-base font-bold text-amber-800 dark:text-amber-300">Maintenance mode</p>
+              <p className="mt-0.5 text-xs text-amber-700 dark:text-amber-400">
+                Location tracking is temporarily paused platform-wide. You can't go online right now - check back shortly.
+              </p>
+            </div>
           </div>
-          <span className={`ml-3 flex h-11 w-11 shrink-0 items-center justify-center rounded-full ${isOnline ? 'bg-white/20' : 'bg-brand-100 text-brand-600 dark:bg-brand-500/15'}`}>
-            <Power size={20} />
-          </span>
-        </button>
-        {isOnline && permissionState === 'denied' && (
+        ) : (
+          <button
+            onClick={toggle}
+            disabled={isSaving || !!activeDelivery}
+            className={`flex w-full items-center justify-between rounded-2xl p-4 text-left shadow-card transition-colors ${
+              isOnline ? 'bg-brand-600 text-white' : 'bg-white text-slate-800 dark:bg-slate-900 dark:text-slate-100'
+            } disabled:cursor-not-allowed disabled:opacity-80`}
+          >
+            <div className="min-w-0">
+              <p className="text-base font-bold">{isOnline ? "You're online" : "You're offline"}</p>
+              <p className={`mt-0.5 truncate text-xs ${isOnline ? 'text-white/80' : 'text-slate-500 dark:text-slate-400'}`}>
+                {activeDelivery
+                  ? 'Finish your current delivery to go offline'
+                  : isOnline
+                    ? lastPosition
+                      ? `Sending your location - ${lastPosition.latitude.toFixed(4)}, ${lastPosition.longitude.toFixed(4)}`
+                      : 'Sending your location...'
+                    : 'Go online to start receiving orders'}
+              </p>
+            </div>
+            <span className={`ml-3 flex h-11 w-11 shrink-0 items-center justify-center rounded-full ${isOnline ? 'bg-white/20' : 'bg-brand-100 text-brand-600 dark:bg-brand-500/15'}`}>
+              <Power size={20} />
+            </span>
+          </button>
+        )}
+        {locationTrackingEnabled && isOnline && permissionState === 'denied' && (
           <p className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-700 dark:bg-amber-500/10 dark:text-amber-400">
             Location permission is denied - enable it in your browser settings so the app can report your position while you deliver.
           </p>
         )}
-        {locationError && <p className="mt-2 text-xs text-rose-500">{locationError}</p>}
+        {locationTrackingEnabled && locationError && <p className="mt-2 text-xs text-rose-500">{locationError}</p>}
       </div>
 
       {activeDelivery && (
