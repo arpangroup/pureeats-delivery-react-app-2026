@@ -1,12 +1,13 @@
 import { NavLink } from 'react-router-dom'
-import { Home, ListChecks, Bike, Wallet, User } from 'lucide-react'
+import { Home, ListChecks, Bike, BarChart3, User } from 'lucide-react'
 import { classNames } from '@/lib/format'
 
 const tabs = [
   { to: '/', label: 'Home', icon: Home, end: true },
   { to: '/orders/available', label: 'Available', icon: ListChecks, end: false },
   { to: '/deliveries/active', label: 'Deliveries', icon: Bike, end: false },
-  { to: '/profile/wallet', label: 'Wallet', icon: Wallet, end: false },
+  // Earnings analytics; the wallet & settlement screen is one tap away from it (and from Home).
+  { to: '/earnings', label: 'Earnings', icon: BarChart3, end: false },
   { to: '/profile', label: 'Profile', icon: User, end: false },
 ] as const
 

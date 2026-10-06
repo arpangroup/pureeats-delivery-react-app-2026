@@ -139,3 +139,109 @@ export interface WalletTransaction {
   note: string | null
   createdAt: string
 }
+
+/** One delivered trip as an earning - GET /delivery/earnings. */
+export interface RiderEarning {
+  tripId: number
+  orderId: number
+  uniqueOrderId: string
+  restaurantName: string
+  customerAddress: string | null
+  deliveredAt: string
+  distanceKm: number
+  orderTotal: number | null
+  deliveryCharge: number | null
+  paymentMode: string | null
+  commissionRate: number | null
+  /** FULL_ORDER or DELIVERY_CHARGE_ONLY. */
+  commissionBasis: string | null
+  commissionBase: number | null
+  /** The rate shown is the rider's current one (old trip recorded before rate snapshots existed). */
+  rateIsCurrent: boolean
+  earning: number
+  /** COD cash collected from the customer - held by the rider until settlement. */
+  codCollected: number
+  settled: boolean
+  settlementId: number | null
+  settledAt: string | null
+}
+
+export type SettlementDirection = 'PAID_TO_RIDER' | 'COLLECTED_FROM_RIDER' | 'EVEN'
+
+export interface RiderSettlement {
+  id: number
+  earningsAmount: number
+  codAmount: number
+  netAmount: number
+  direction: SettlementDirection
+  tripCount: number
+  transactionMode: string | null
+  transactionReference: string | null
+  note: string | null
+  createdAt: string
+}
+
+/** Where the rider stands - GET /delivery/earnings/summary. netPending = pendingEarnings - cashInHand. */
+export interface RiderEarningsSummary {
+  lifetimeEarnings: number
+  lifetimeTrips: number
+  pendingEarnings: number
+  cashInHand: number
+  netPending: number
+  netDirection: SettlementDirection
+  unsettledTrips: number
+  settledEarnings: number
+  lastSettlement: RiderSettlement | null
+}
+
+export type AnalyticsPeriod = 'DAY' | 'WEEK' | 'MONTH' | 'CUSTOM'
+
+export interface AnalyticsTotals {
+  earnings: number
+  trips: number
+  averagePerTrip: number
+  distanceKm: number
+  averageDistanceKm: number
+  codCollected: number
+  activeDays: number
+}
+
+export interface AnalyticsBucket {
+  label: string
+  from: string
+  to: string
+  earnings: number
+  trips: number
+}
+
+/** GET /delivery/earnings/analytics. */
+export interface RiderEarningsAnalytics {
+  period: AnalyticsPeriod
+  currentFrom: string
+  currentTo: string
+  current: AnalyticsTotals
+  previousFrom: string
+  previousTo: string
+  previous: AnalyticsTotals
+  changePercent: number | null
+  bucketSize: 'DAY' | 'WEEK' | 'MONTH'
+  buckets: AnalyticsBucket[]
+  bestBucket: AnalyticsBucket | null
+  byHour: { hour: number; earnings: number; trips: number }[]
+  byWeekday: AnalyticsBucket[]
+  paymentSplit: { codTrips: number; codCollected: number; onlineTrips: number }
+  topRestaurants: { restaurantId: number; restaurantName: string; trips: number; earnings: number }[]
+}
+
+/** A wallet ledger entry linked to its cause - GET /delivery/wallet/transactions. */
+export interface RiderWalletTransaction {
+  id: number
+  type: 'credit' | 'debit'
+  amount: number
+  note: string | null
+  createdAt: string
+  kind: 'EARNING' | 'SETTLEMENT' | 'ADJUSTMENT'
+  orderId: number | null
+  uniqueOrderId: string | null
+  settlementId: number | null
+}
