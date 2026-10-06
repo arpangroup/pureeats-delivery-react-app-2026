@@ -9,6 +9,7 @@ import { useRiderSession } from '@/context/RiderSessionContext'
 import { useOnResume } from '@/hooks/useOnResume'
 import { formatCurrency, timeAgo } from '@/lib/format'
 import type { AvailableOrder } from '@/types/entities'
+import { showErrorToast } from '@/lib/errorToast'
 
 const REFRESH_INTERVAL_MS = 10000
 
@@ -29,6 +30,7 @@ export default function AvailableOrdersPage() {
       setOrders(list)
       setError(null)
     } catch (err) {
+      showErrorToast(err)
       setError((err as { message?: string })?.message ?? 'Could not load available orders.')
     }
   }, [])
@@ -51,6 +53,7 @@ export default function AvailableOrdersPage() {
       markSelfAccepted(orderId)
       navigate('/deliveries/active')
     } catch (err) {
+      showErrorToast(err)
       setAcceptError({ orderId, message: (err as { message?: string })?.message ?? 'Could not accept this order - it may have just been taken.' })
       setAcceptingId(null)
       load() // drop it from the list if someone else got it

@@ -7,6 +7,7 @@ import { deliveryOrderService } from '@/services/deliveryOrderService'
 import { SwipeToAcceptButton } from '@/components/ui/SwipeToAcceptButton'
 import { formatCurrency } from '@/lib/format'
 import { startRinging, stopRinging } from '@/lib/orderSound'
+import { showErrorToast } from '@/lib/errorToast'
 
 const ALERT_DURATION_S = INCOMING_ORDER_ALERT_MS / 1000
 const RING_RADIUS = 26
@@ -78,6 +79,7 @@ export function FullScreenOrderAlert() {
       clearIncomingOrder()
       navigate('/deliveries/active')
     } catch (err) {
+      showErrorToast(err)
       setError((err as { message?: string })?.message ?? 'Could not accept this order - it may have just been taken.')
       setAccepting(false)
     }

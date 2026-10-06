@@ -8,6 +8,7 @@ import { walletService } from '@/services/walletService'
 import { formatCurrency } from '@/lib/format'
 import { Skeleton } from '@/components/ui/Feedback'
 import type { RiderProfile } from '@/types/entities'
+import { showErrorToast } from '@/lib/errorToast'
 
 export default function HomePage() {
   const { user } = useAuth()
@@ -16,6 +17,7 @@ export default function HomePage() {
   const {
     isOnline,
     isSaving,
+    error: statusError,
     toggle,
     statusNotice,
     dismissStatusNotice,
@@ -34,12 +36,18 @@ export default function HomePage() {
   useEffect(() => {
     if (!user) return
     let cancelled = false
-    Promise.all([riderProfileService.getMyProfile(user.id), walletService.balance(user.id)]).then(([prof, bal]) => {
-      if (cancelled) return
-      setProfile(prof)
-      setBalance(bal)
-      setLoading(false)
-    })
+    Promise.all([riderProfileService.getMyProfile(user.id), walletService.balance(user.id)])
+      .then(([prof, bal]) => {
+        if (cancelled) return
+        setProfile(prof)
+        setBalance(bal)
+        setLoading(false)
+      })
+      .catch((err) => {
+        if (cancelled) return
+        setLoading(false)
+        showErrorToast(err, 'Could not load your stats.')
+      })
     return () => {
       cancelled = true
     }
@@ -105,6 +113,7 @@ export default function HomePage() {
             Location permission is denied - enable it in your browser settings so the app can report your position while you deliver.
           </p>
         )}
+        {statusError && <p className="mt-2 rounded-lg bg-rose-50 px-3 py-2 text-xs text-rose-600 dark:bg-rose-500/10 dark:text-rose-400">{statusError}</p>}
         {locationTrackingEnabled && locationError && <p className="mt-2 text-xs text-rose-500">{locationError}</p>}
       </div>
 

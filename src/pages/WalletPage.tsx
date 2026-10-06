@@ -6,6 +6,7 @@ import { useAuth } from '@/hooks/useAuth'
 import { walletService } from '@/services/walletService'
 import { formatCurrency, formatDate } from '@/lib/format'
 import type { WalletTransaction } from '@/types/entities'
+import { showErrorToast } from '@/lib/errorToast'
 
 export default function WalletPage() {
   const { user } = useAuth()
@@ -15,11 +16,15 @@ export default function WalletPage() {
   useEffect(() => {
     if (!user) return
     let cancelled = false
-    Promise.all([walletService.balance(user.id), walletService.transactions(user.id)]).then(([bal, txns]) => {
-      if (cancelled) return
-      setBalance(bal)
-      setTransactions(txns)
-    })
+    Promise.all([walletService.balance(user.id), walletService.transactions(user.id)])
+      .then(([bal, txns]) => {
+        if (cancelled) return
+        setBalance(bal)
+        setTransactions(txns)
+      })
+      .catch((err) => {
+        if (!cancelled) showErrorToast(err, 'Could not load your wallet.')
+      })
     return () => {
       cancelled = true
     }

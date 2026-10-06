@@ -9,6 +9,7 @@ import { userService } from '@/services/userService'
 import { initials } from '@/lib/format'
 import { IS_MOCK } from '@/config/env'
 import type { Gender, RiderProfile } from '@/types/entities'
+import { showErrorToast } from '@/lib/errorToast'
 
 type ContactField = 'phone' | 'email'
 
@@ -53,6 +54,7 @@ function ContactChangeCard({
       setMaskedDestination(result.maskedDestination)
       setStep('otp')
     } catch (err) {
+      showErrorToast(err)
       setError((err as { message?: string })?.message ?? 'Could not send OTP.')
     } finally {
       setBusy(false)
@@ -69,6 +71,7 @@ function ContactChangeCard({
       onChanged(field === 'phone' ? updated.phone : updated.email)
       reset()
     } catch (err) {
+      showErrorToast(err)
       setError((err as { message?: string })?.message ?? 'Invalid or expired OTP.')
     } finally {
       setBusy(false)
@@ -166,7 +169,9 @@ export default function EditRiderProfilePage() {
   useEffect(() => {
     if (!user) return
     let cancelled = false
-    riderProfileService.getMyProfile(user.id).then((p) => {
+    riderProfileService
+      .getMyProfile(user.id)
+      .then((p) => {
       if (cancelled) return
       setProfile(p)
       setName(p?.name ?? user.name)
@@ -178,6 +183,9 @@ export default function EditRiderProfilePage() {
       setPhone(user.phone)
       setEmail(user.email)
     })
+      .catch((err) => {
+        if (!cancelled) showErrorToast(err, 'Could not load your profile.')
+      })
     return () => {
       cancelled = true
     }
@@ -214,6 +222,7 @@ export default function EditRiderProfilePage() {
       setPhotoFile(null)
       setSaved(true)
     } catch (err) {
+      showErrorToast(err)
       setError((err as { message?: string })?.message ?? 'Could not save your changes.')
     } finally {
       setSaving(false)

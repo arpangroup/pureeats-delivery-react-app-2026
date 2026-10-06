@@ -8,6 +8,7 @@ import { deliveryOrderService } from '@/services/deliveryOrderService'
 import { useRiderSession } from '@/context/RiderSessionContext'
 import { formatCurrency } from '@/lib/format'
 import type { ActiveDelivery } from '@/types/entities'
+import { showErrorToast } from '@/lib/errorToast'
 
 /** Deep-links out to the phone's own maps app instead of embedding a map - this app has no
  * @react-google-maps/api dependency. */
@@ -40,6 +41,7 @@ export default function ActiveDeliveryPage() {
       await deliveryOrderService.pickup(delivery.id)
       await refreshActiveDeliveries()
     } catch (err) {
+      showErrorToast(err)
       setError((err as { message?: string })?.message ?? 'Could not mark as picked up.')
     } finally {
       setBusy(false)
@@ -57,6 +59,7 @@ export default function ActiveDeliveryPage() {
       setPin('')
       refreshActiveDeliveries()
     } catch (err) {
+      showErrorToast(err)
       setError((err as { message?: string })?.message ?? 'Incorrect PIN.')
     } finally {
       setBusy(false)
