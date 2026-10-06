@@ -1,13 +1,13 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { MapPin, Store, Package, Wallet, Route } from 'lucide-react'
+import { MapPin, Store } from 'lucide-react'
 import { INCOMING_ORDER_ALERT_MS, useIncomingOrder } from '@/context/IncomingOrderContext'
 import { useRiderSession } from '@/context/RiderSessionContext'
 import { deliveryOrderService } from '@/services/deliveryOrderService'
 import { SwipeToAcceptButton } from '@/components/ui/SwipeToAcceptButton'
-import { formatCurrency } from '@/lib/format'
 import { startRinging, stopRinging } from '@/lib/orderSound'
 import { showErrorToast } from '@/lib/errorToast'
+import { OrderTripMetrics } from '@/components/order/OrderTripMetrics'
 
 const ALERT_DURATION_S = INCOMING_ORDER_ALERT_MS / 1000
 const RING_RADIUS = 26
@@ -141,22 +141,8 @@ export function FullScreenOrderAlert() {
           </div>
         </div>
 
-        <div className="mt-4 grid grid-cols-3 gap-2">
-          <div className="rounded-xl bg-white/5 p-3 text-center">
-            <Route size={16} className="mx-auto mb-1 text-brand-400" />
-            <p className="text-sm font-bold">{incomingOrder.distanceKm} km</p>
-            <p className="text-[11px] text-white/50">Distance</p>
-          </div>
-          <div className="rounded-xl bg-white/5 p-3 text-center">
-            <Package size={16} className="mx-auto mb-1 text-brand-400" />
-            <p className="text-sm font-bold">{incomingOrder.itemsCount}</p>
-            <p className="text-[11px] text-white/50">Items</p>
-          </div>
-          <div className="rounded-xl bg-white/5 p-3 text-center">
-            <Wallet size={16} className="mx-auto mb-1 text-brand-400" />
-            <p className="text-sm font-bold">{formatCurrency(incomingOrder.payoutEstimate)}</p>
-            <p className="text-[11px] text-white/50">Payout</p>
-          </div>
+        <div className="mt-4">
+          <OrderTripMetrics order={incomingOrder} variant="dark" />
         </div>
 
         {error && <p className="mt-4 rounded-lg bg-rose-500/15 px-3 py-2 text-sm text-rose-300">{error}</p>}

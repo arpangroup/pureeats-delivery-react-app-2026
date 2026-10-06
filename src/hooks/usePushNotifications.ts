@@ -40,6 +40,9 @@ function tryParseAvailableOrder(data: Record<string, string>): AvailableOrder | 
     payoutEstimate,
     itemsCount,
     createdAt: data.createdAt ?? new Date().toISOString(),
+    tipAmount: Number.isFinite(Number(data.tipAmount)) ? Number(data.tipAmount) : 0,
+    pickupDistanceKm: Number.isFinite(Number(data.pickupDistanceKm)) && data.pickupDistanceKm != null ? Number(data.pickupDistanceKm) : null,
+    dropDistanceKm: distanceKm,
   }
 }
 

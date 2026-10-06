@@ -6,7 +6,10 @@ import type { AvailableOrder } from '@/types/entities'
  * always look like they just came in. Bangalore-area restaurant/customer pairs, distances
  * 0.8-4.5km, payouts Rs.35-75 per the spec.
  */
-export const availableOrderTemplates: Omit<AvailableOrder, 'createdAt'>[] = [
+/** Tip/pickup/drop are filled in by the mock deliveryOrderService (see withMockExtras) rather than repeated on every template. */
+export type AvailableOrderTemplate = Omit<AvailableOrder, 'createdAt' | 'tipAmount' | 'pickupDistanceKm' | 'dropDistanceKm'> & { tipAmount?: number }
+
+export const availableOrderTemplates: AvailableOrderTemplate[] = [
   {
     id: 9101,
     uniqueOrderId: 'PE-2026-009101',

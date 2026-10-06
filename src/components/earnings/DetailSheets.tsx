@@ -122,6 +122,7 @@ export function EarningDetailSheet({ orderId, onClose, onOpenSettlement }: { ord
                 hint={earning.rateIsCurrent ? 'Shown at your current rate - this trip predates rate snapshots.' : undefined}
               />
             )}
+            {earning.tipAmount > 0 && <Row label="Customer tip" value={`+ ${formatCurrency(earning.tipAmount)}`} />}
             <Row label="You earned" value={formatCurrency(earning.earning)} strong />
             <Row label="Distance" value={`${earning.distanceKm.toFixed(1)} km`} />
             <Row label="Payment" value={paymentLabel(earning.paymentMode)} />

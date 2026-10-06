@@ -51,10 +51,18 @@ export interface AvailableOrder {
   customerAddress: string
   customerLat: number
   customerLng: number
+  /** Restaurant -> customer (same as dropDistanceKm; kept for older backends). */
   distanceKm: number
+  /** Commission only - the tip is separate (tipAmount). */
   payoutEstimate: number
   itemsCount: number
   createdAt: string
+  /** Customer's tip, paid to the rider in full on delivery on top of payoutEstimate. */
+  tipAmount: number
+  /** Rider -> restaurant, from the rider's last reported position; null before the first ping (the app prefers its own live GPS - see usePickupDistance). */
+  pickupDistanceKm: number | null
+  /** Restaurant -> customer. */
+  dropDistanceKm: number
 }
 
 export interface ActiveDeliveryItem {
@@ -91,6 +99,8 @@ export interface ActiveDelivery {
   items: ActiveDeliveryItem[]
   payoutEstimate: number
   distanceKm: number
+  /** Customer's tip - paid in full on delivery. */
+  tipAmount?: number
   createdAt: string
   acceptedAt: string | null
   pickedUpAt: string | null
@@ -158,7 +168,10 @@ export interface RiderEarning {
   commissionBase: number | null
   /** The rate shown is the rider's current one (old trip recorded before rate snapshots existed). */
   rateIsCurrent: boolean
+  /** Commission + tip. */
   earning: number
+  /** Tip included in earning. */
+  tipAmount: number
   /** COD cash collected from the customer - held by the rider until settlement. */
   codCollected: number
   settled: boolean
