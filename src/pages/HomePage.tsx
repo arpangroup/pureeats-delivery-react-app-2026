@@ -1,24 +1,32 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Power, ListChecks, Bike, Wallet as WalletIcon, Star, Wrench } from 'lucide-react'
+import { Power, ListChecks, Bike, Wallet as WalletIcon, Star, Wrench, AlertTriangle, X } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
-import { useOnlineStatus } from '@/hooks/useOnlineStatus'
-import { useLocationReporting } from '@/hooks/useLocationReporting'
-import { usePlatformSettings } from '@/hooks/usePlatformSettings'
-import { useAvailableOrdersPolling } from '@/hooks/useAvailableOrdersPolling'
-import { deliveryOrderService } from '@/services/deliveryOrderService'
+import { useRiderSession } from '@/context/RiderSessionContext'
 import { riderProfileService } from '@/services/riderProfileService'
 import { walletService } from '@/services/walletService'
 import { formatCurrency } from '@/lib/format'
 import { Skeleton } from '@/components/ui/Feedback'
-import type { ActiveDelivery, RiderProfile } from '@/types/entities'
+import type { RiderProfile } from '@/types/entities'
 
 export default function HomePage() {
   const { user } = useAuth()
-  const { isOnline, isSaving, toggle } = useOnlineStatus()
-  const { locationTrackingEnabled, loaded: platformSettingsLoaded } = usePlatformSettings()
-  const { lastPosition, permissionState, error: locationError } = useLocationReporting(isOnline, locationTrackingEnabled)
-  const [activeDelivery, setActiveDelivery] = useState<ActiveDelivery | null>(null)
+  // Online status, GPS pings and new-order polling all live app-wide in RiderSessionProvider now, so
+  // they keep running when the rider switches to another tab - this page only renders them.
+  const {
+    isOnline,
+    isSaving,
+    toggle,
+    statusNotice,
+    dismissStatusNotice,
+    locationTrackingEnabled,
+    platformSettingsLoaded,
+    lastPosition,
+    permissionState,
+    locationError,
+    activeDeliveries,
+  } = useRiderSession()
+  const activeDelivery = activeDeliveries?.[0] ?? null
   const [profile, setProfile] = useState<RiderProfile | null>(null)
   const [balance, setBalance] = useState<number | null>(null)
   const [loading, setLoading] = useState(true)
@@ -26,23 +34,16 @@ export default function HomePage() {
   useEffect(() => {
     if (!user) return
     let cancelled = false
-    Promise.all([deliveryOrderService.getActiveDelivery(), riderProfileService.getMyProfile(user.id), walletService.balance(user.id)]).then(
-      ([active, prof, bal]) => {
-        if (cancelled) return
-        setActiveDelivery(active)
-        setProfile(prof)
-        setBalance(bal)
-        setLoading(false)
-      },
-    )
+    Promise.all([riderProfileService.getMyProfile(user.id), walletService.balance(user.id)]).then(([prof, bal]) => {
+      if (cancelled) return
+      setProfile(prof)
+      setBalance(bal)
+      setLoading(false)
+    })
     return () => {
       cancelled = true
     }
   }, [user?.id])
-
-  // The full-screen alert (mounted at the app root) is the ONLY thing that renders a new-order
-  // popup - this hook just feeds it when push notifications aren't doing the job.
-  useAvailableOrdersPolling({ isOnline, hasActiveDelivery: !!activeDelivery })
 
   return (
     <div>
@@ -53,6 +54,15 @@ export default function HomePage() {
 
       {/* The most visible instantiation of the online/offline requirement - deliberately not buried in settings. */}
       <div className="mx-4 mb-4">
+        {statusNotice && (
+          <div className="mb-3 flex items-start gap-2 rounded-xl bg-amber-50 p-3 text-xs text-amber-800 dark:bg-amber-500/10 dark:text-amber-300">
+            <AlertTriangle size={16} className="mt-0.5 shrink-0" />
+            <p className="flex-1">{statusNotice}</p>
+            <button onClick={dismissStatusNotice} aria-label="Dismiss" className="shrink-0 text-amber-700 dark:text-amber-400">
+              <X size={14} />
+            </button>
+          </div>
+        )}
         {platformSettingsLoaded && !locationTrackingEnabled ? (
           <div className="flex w-full items-center gap-3 rounded-2xl bg-amber-50 p-4 shadow-card dark:bg-amber-500/10">
             <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-400">
@@ -100,7 +110,10 @@ export default function HomePage() {
 
       {activeDelivery && (
         <div className="mx-4 mb-4 rounded-2xl border border-brand-200 bg-brand-50 p-4 dark:border-brand-500/30 dark:bg-brand-500/10">
-          <p className="text-xs font-semibold uppercase tracking-wide text-brand-700 dark:text-brand-400">Delivery in progress</p>
+          <p className="text-xs font-semibold uppercase tracking-wide text-brand-700 dark:text-brand-400">
+            {activeDeliveries && activeDeliveries.length > 1 ? `${activeDeliveries.length} deliveries in progress` : 'Delivery in progress'}
+            {activeDelivery.assignedBy === 'ADMIN' && ' - assigned by admin'}
+          </p>
           <p className="mt-1 text-sm font-medium text-slate-800 dark:text-slate-100">
             {activeDelivery.restaurantName} &rarr; {activeDelivery.customerAddress}
           </p>

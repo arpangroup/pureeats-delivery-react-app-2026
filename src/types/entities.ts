@@ -22,12 +22,17 @@ export interface User {
 export type OrderStatus =
   | 'PLACED'
   | 'RESTAURANT_ACCEPTED'
+  | 'PREPARING'
   | 'READY_FOR_PICKUP'
   | 'RIDER_ASSIGNED'
   | 'PICKED_UP'
+  | 'ON_THE_WAY'
   | 'DELIVERED'
   | 'SELF_PICKUP_COMPLETED'
   | 'CANCELLED'
+  | 'REJECTED'
+  | 'RETURNED'
+  | 'AUTO_CANCELLED'
 
 /** A {lat,lng} waypoint - used for the restaurant/customer pins and the demo-route fixtures. */
 export interface RoutePoint {
@@ -71,6 +76,8 @@ export interface ActiveDelivery {
   id: number
   uniqueOrderId: string
   status: OrderStatus
+  /** 'ADMIN' when ops assigned this order to the rider directly, 'DELIVERY' when the rider accepted it themself. */
+  assignedBy?: 'ADMIN' | 'DELIVERY'
   restaurantName: string
   restaurantAddress: string
   restaurantLat: number

@@ -1,6 +1,7 @@
 import { useEffect } from 'react'
 import { useAuth } from '@/hooks/useAuth'
 import { useIncomingOrder } from '@/context/IncomingOrderContext'
+import { useRiderSession } from '@/context/RiderSessionContext'
 import { onForegroundMessage, requestPushToken } from '@/lib/firebaseMessaging'
 import { notificationService } from '@/services/notificationService'
 import { deliveryOrderService } from '@/services/deliveryOrderService'
@@ -51,11 +52,13 @@ function tryParseAvailableOrder(data: Record<string, string>): AvailableOrder | 
  *
  * For `type === 'NEW_ORDER'` this goes STRAIGHT to the full-screen alert via
  * IncomingOrderContext - no toast, unlike the customer app's general notification toast. Any other
- * category is ignored entirely; this app has no general notification-center UI to feed.
+ * category just triggers a refresh of the rider's active assignments (an admin may have assigned
+ * them an order); this app has no general notification-center UI to feed.
  */
 export function usePushNotifications() {
   const { user, isRider } = useAuth()
   const { showIncomingOrder } = useIncomingOrder()
+  const { refreshActiveDeliveries } = useRiderSession()
 
   useEffect(() => {
     if (!user || !isRider) return
@@ -70,7 +73,12 @@ export function usePushNotifications() {
     })
 
     const unsubscribe = onForegroundMessage((payload) => {
-      if (payload.data?.type !== 'NEW_ORDER') return
+      if (payload.data?.type !== 'NEW_ORDER') {
+        // Any other order push (e.g. "New delivery assigned" when an admin assigns this rider) -
+        // re-fetch the rider's assignments right away instead of waiting for the next poll.
+        refreshActiveDeliveries()
+        return
+      }
       const parsed = payload.data ? tryParseAvailableOrder(payload.data as Record<string, string>) : null
       if (parsed) {
         showIncomingOrder(parsed)
