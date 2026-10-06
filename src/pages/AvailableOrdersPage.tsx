@@ -19,6 +19,8 @@ export default function AvailableOrdersPage() {
   const [orders, setOrders] = useState<AvailableOrder[] | null>(null)
   const [acceptingId, setAcceptingId] = useState<number | null>(null)
   const [error, setError] = useState<string | null>(null)
+  /** Accept failures are shown inside the card that was swiped - the page-level banner is off-screen once the rider has scrolled down to it. */
+  const [acceptError, setAcceptError] = useState<{ orderId: number; message: string } | null>(null)
   const { markSelfAccepted } = useRiderSession()
 
   const load = useCallback(async () => {
@@ -43,13 +45,13 @@ export default function AvailableOrdersPage() {
 
   async function handleAccept(orderId: number) {
     setAcceptingId(orderId)
-    setError(null)
+    setAcceptError(null)
     try {
       await deliveryOrderService.accept(orderId)
       markSelfAccepted(orderId)
       navigate('/deliveries/active')
     } catch (err) {
-      setError((err as { message?: string })?.message ?? 'Could not accept this order - it may have just been taken.')
+      setAcceptError({ orderId, message: (err as { message?: string })?.message ?? 'Could not accept this order - it may have just been taken.' })
       setAcceptingId(null)
       load() // drop it from the list if someone else got it
     }
@@ -95,6 +97,10 @@ export default function AvailableOrdersPage() {
                 <p className="text-[10px] text-slate-400">Payout</p>
               </div>
             </div>
+
+            {acceptError?.orderId === order.id && (
+              <p className="mt-3 rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-600 dark:bg-rose-500/10 dark:text-rose-400">{acceptError.message}</p>
+            )}
 
             <div className="mt-3">
               <SwipeToAcceptButton
