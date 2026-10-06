@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { getCurrentPosition, queryGeolocationPermission, type Coordinates, type GeolocationPermissionState } from '@/lib/geolocation'
 import { deliveryStatusService } from '@/services/deliveryStatusService'
 
@@ -12,29 +12,35 @@ const PING_INTERVAL_MS = 15000
  * no lag. `trackingEnabled` deliberately gates this the same way `isOnline` does, at the same
  * level, rather than leaving callers to remember to combine the two flags themselves - this is the
  * one place GPS pings actually go out, so it's the one place that must never get the gate wrong.
+ *
+ * Mounted app-wide (RiderSessionProvider), not per page - pings used to stop the moment the rider
+ * left the Home tab, which let the backend's inactivity sweep force them offline. `reportNow` lets
+ * the session send a ping straight away when the app returns from the background.
  */
 export function useLocationReporting(isOnline: boolean, trackingEnabled: boolean) {
   const [lastPosition, setLastPosition] = useState<Coordinates | null>(null)
   const [permissionState, setPermissionState] = useState<GeolocationPermissionState>('prompt')
   const [error, setError] = useState<string | null>(null)
   const requestedPermissionOnce = useRef(false)
+  const activeRef = useRef(false)
+  activeRef.current = isOnline && trackingEnabled
+
+  const reportOnce = useCallback(async () => {
+    if (!activeRef.current) return
+    try {
+      const position = await getCurrentPosition()
+      if (!activeRef.current) return
+      setLastPosition(position)
+      setError(null)
+      await deliveryStatusService.pingLocation(position.latitude, position.longitude)
+    } catch (err) {
+      if (activeRef.current) setError((err as Error)?.message ?? 'Could not read your location.')
+    }
+  }, [])
 
   useEffect(() => {
     if (!isOnline || !trackingEnabled) return
     let cancelled = false
-    let intervalId: ReturnType<typeof setInterval> | undefined
-
-    async function reportOnce() {
-      try {
-        const position = await getCurrentPosition()
-        if (cancelled) return
-        setLastPosition(position)
-        setError(null)
-        await deliveryStatusService.pingLocation(position.latitude, position.longitude)
-      } catch (err) {
-        if (!cancelled) setError((err as Error)?.message ?? 'Could not read your location.')
-      }
-    }
 
     if (!requestedPermissionOnce.current) {
       requestedPermissionOnce.current = true
@@ -44,13 +50,13 @@ export function useLocationReporting(isOnline: boolean, trackingEnabled: boolean
     }
 
     reportOnce()
-    intervalId = setInterval(reportOnce, PING_INTERVAL_MS)
+    const intervalId = setInterval(reportOnce, PING_INTERVAL_MS)
 
     return () => {
       cancelled = true
-      if (intervalId) clearInterval(intervalId)
+      clearInterval(intervalId)
     }
-  }, [isOnline, trackingEnabled])
+  }, [isOnline, trackingEnabled, reportOnce])
 
-  return { lastPosition, permissionState, error }
+  return { lastPosition, permissionState, error, reportNow: reportOnce }
 }

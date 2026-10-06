@@ -1,4 +1,4 @@
-import { useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
+import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
 import { ChevronsRight, Check } from 'lucide-react'
 import { classNames } from '@/lib/format'
 
@@ -28,6 +28,19 @@ export function SwipeToAcceptButton({
   const [accepted, setAccepted] = useState(false)
   const dragStartClientX = useRef(0)
   const dragStartX = useRef(0)
+  const wasDisabled = useRef(disabled)
+
+  // The parent disables the control while its accept call is in flight. If that call FAILS (order
+  // already taken, network drop after the app was backgrounded, ...) it re-enables us - spring the
+  // thumb back so the rider can retry. Previously the thumb stayed locked on "Accepted!" forever
+  // after any failure, so the order could never be accepted from that screen again.
+  useEffect(() => {
+    if (wasDisabled.current && !disabled && accepted) {
+      setAccepted(false)
+      setDragX(0)
+    }
+    wasDisabled.current = disabled
+  }, [disabled, accepted])
 
   function trackMax(): number {
     const track = trackRef.current

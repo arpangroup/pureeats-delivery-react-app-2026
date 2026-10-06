@@ -1,14 +1,21 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { MapPin, Store, Package, Wallet, Route } from 'lucide-react'
-import { useIncomingOrder } from '@/context/IncomingOrderContext'
+import { INCOMING_ORDER_ALERT_MS, useIncomingOrder } from '@/context/IncomingOrderContext'
+import { useRiderSession } from '@/context/RiderSessionContext'
 import { deliveryOrderService } from '@/services/deliveryOrderService'
 import { SwipeToAcceptButton } from '@/components/ui/SwipeToAcceptButton'
 import { formatCurrency } from '@/lib/format'
+import { startRinging, stopRinging } from '@/lib/orderSound'
 
-const ALERT_DURATION_S = 20
+const ALERT_DURATION_S = INCOMING_ORDER_ALERT_MS / 1000
 const RING_RADIUS = 26
 const RING_CIRCUMFERENCE = 2 * Math.PI * RING_RADIUS
+
+function secondsRemaining(shownAt: number | null): number {
+  if (shownAt === null) return ALERT_DURATION_S
+  return Math.max(0, Math.ceil((shownAt + INCOMING_ORDER_ALERT_MS - Date.now()) / 1000))
+}
 
 /**
  * The centerpiece of the app: a full-viewport, always-on-top new-order popup - mounted once at the
@@ -17,9 +24,15 @@ const RING_CIRCUMFERENCE = 2 * Math.PI * RING_RADIUS
  * hook and the push handler write into it - nothing else shows a competing UI for this). Modeled
  * after a real Zomato/Swiggy order popup: bold typography, a restaurant-to-customer route row, a
  * countdown ring that auto-dismisses back to the available-orders list, and swipe-to-accept.
+ *
+ * Rings the order sound (admin-configured, or the built-in chime) for as long as it's on screen.
+ * The countdown is computed from the wall-clock time the alert was raised, not from interval ticks,
+ * so an alert raised while the app was backgrounded is correctly expired (or shows its true
+ * remaining time) when the rider returns, instead of a stale order they can no longer accept.
  */
 export function FullScreenOrderAlert() {
-  const { incomingOrder, clearIncomingOrder } = useIncomingOrder()
+  const { incomingOrder, shownAt, clearIncomingOrder } = useIncomingOrder()
+  const { markSelfAccepted } = useRiderSession()
   const navigate = useNavigate()
   const [secondsLeft, setSecondsLeft] = useState(ALERT_DURATION_S)
   const [accepting, setAccepting] = useState(false)
@@ -27,15 +40,18 @@ export function FullScreenOrderAlert() {
 
   useEffect(() => {
     if (!incomingOrder) return
-    setSecondsLeft(ALERT_DURATION_S)
+    setSecondsLeft(secondsRemaining(shownAt))
     setAccepting(false)
     setError(null)
-    const timer = setInterval(() => {
-      setSecondsLeft((s) => Math.max(0, s - 1))
-    }, 1000)
-    return () => clearInterval(timer)
+    const tick = () => setSecondsLeft(secondsRemaining(shownAt))
+    const timer = setInterval(tick, 1000)
+    document.addEventListener('visibilitychange', tick)
+    return () => {
+      clearInterval(timer)
+      document.removeEventListener('visibilitychange', tick)
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [incomingOrder?.id])
+  }, [incomingOrder?.id, shownAt])
 
   useEffect(() => {
     if (incomingOrder && secondsLeft === 0) {
@@ -44,13 +60,21 @@ export function FullScreenOrderAlert() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [secondsLeft])
 
+  useEffect(() => {
+    if (!incomingOrder) return
+    startRinging(3500)
+    return () => stopRinging()
+  }, [incomingOrder?.id]) // eslint-disable-line react-hooks/exhaustive-deps
+
   if (!incomingOrder) return null
 
   async function handleAccept() {
     setAccepting(true)
     setError(null)
+    stopRinging()
     try {
       await deliveryOrderService.accept(incomingOrder!.id)
+      markSelfAccepted(incomingOrder!.id)
       clearIncomingOrder()
       navigate('/deliveries/active')
     } catch (err) {

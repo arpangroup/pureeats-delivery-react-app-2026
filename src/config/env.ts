@@ -30,7 +30,7 @@ export const APP_VERSION = __APP_VERSION__
  * Firebase project config for push notifications (new-order alerts) - every field defaults to
  * empty since no Firebase project exists yet locally. `src/lib/firebaseMessaging.ts` checks
  * `HAS_FIREBASE_CONFIG` before doing anything; with it unset, new-order alerts fall back entirely
- * to `useAvailableOrdersPolling`'s polling. Fill these in (gitignored .env.local) once a real
+ * to RiderSessionProvider's available-orders polling. Fill these in (gitignored .env.local) once a real
  * Firebase project is created - no code change needed after.
  */
 export const FIREBASE_CONFIG = {

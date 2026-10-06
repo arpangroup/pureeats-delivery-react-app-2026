@@ -1,10 +1,12 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Store, MapPin, Package } from 'lucide-react'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { LoadingBlock, EmptyState } from '@/components/ui/Feedback'
 import { SwipeToAcceptButton } from '@/components/ui/SwipeToAcceptButton'
 import { deliveryOrderService } from '@/services/deliveryOrderService'
+import { useRiderSession } from '@/context/RiderSessionContext'
+import { useOnResume } from '@/hooks/useOnResume'
 import { formatCurrency, timeAgo } from '@/lib/format'
 import type { AvailableOrder } from '@/types/entities'
 
@@ -17,34 +19,39 @@ export default function AvailableOrdersPage() {
   const [orders, setOrders] = useState<AvailableOrder[] | null>(null)
   const [acceptingId, setAcceptingId] = useState<number | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const { markSelfAccepted } = useRiderSession()
 
-  useEffect(() => {
-    let cancelled = false
-    async function load() {
-      try {
-        const list = await deliveryOrderService.listAvailable()
-        if (!cancelled) setOrders(list)
-      } catch (err) {
-        if (!cancelled) setError((err as { message?: string })?.message ?? 'Could not load available orders.')
-      }
-    }
-    load()
-    const intervalId = setInterval(load, REFRESH_INTERVAL_MS)
-    return () => {
-      cancelled = true
-      clearInterval(intervalId)
+  const load = useCallback(async () => {
+    try {
+      const list = await deliveryOrderService.listAvailable()
+      setOrders(list)
+      setError(null)
+    } catch (err) {
+      setError((err as { message?: string })?.message ?? 'Could not load available orders.')
     }
   }, [])
+
+  useEffect(() => {
+    load()
+    const intervalId = setInterval(load, REFRESH_INTERVAL_MS)
+    return () => clearInterval(intervalId)
+  }, [load])
+
+  // Timers are throttled/frozen while the app is backgrounded - refresh the list the moment the
+  // rider comes back instead of showing (and letting them swipe on) a stale one.
+  useOnResume(load)
 
   async function handleAccept(orderId: number) {
     setAcceptingId(orderId)
     setError(null)
     try {
       await deliveryOrderService.accept(orderId)
+      markSelfAccepted(orderId)
       navigate('/deliveries/active')
     } catch (err) {
       setError((err as { message?: string })?.message ?? 'Could not accept this order - it may have just been taken.')
       setAcceptingId(null)
+      load() // drop it from the list if someone else got it
     }
   }
 

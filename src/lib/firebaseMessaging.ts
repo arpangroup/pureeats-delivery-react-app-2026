@@ -6,7 +6,7 @@ import { FIREBASE_CONFIG, FIREBASE_VAPID_KEY, HAS_FIREBASE_CONFIG } from '@/conf
  * Firebase Cloud Messaging wiring for push notifications (new-order-assignment alerts) - entirely
  * inert until real Firebase project config exists via VITE_FIREBASE_* env vars (see
  * src/config/env.ts). Every export here is a safe no-op without that config, so the rest of the
- * app can call these unconditionally - `useAvailableOrdersPolling` is always the fallback.
+ * app can call these unconditionally - RiderSessionProvider's available-orders polling always runs alongside it.
  *
  * Note: this only covers *foreground* messaging (the tab is open). The background handler
  * (public/firebase-messaging-sw.js) is a plain static file outside Vite's build, so it can't read

@@ -2,6 +2,8 @@ import { AppRoutes } from '@/routes/AppRoutes'
 import { IncomingOrderProvider } from '@/context/IncomingOrderContext'
 import { FullScreenOrderAlert } from '@/components/order/FullScreenOrderAlert'
 import { PushNotificationBootstrap } from '@/components/layout/PushNotificationBootstrap'
+import { RiderSessionProvider } from '@/context/RiderSessionContext'
+import { AssignedOrderAlert } from '@/components/order/AssignedOrderAlert'
 
 // Provider tree, trimmed to what a rider app actually needs - no cart/favorites/location/app-config
 // providers like the customer app (none of that is shopping-specific state this app has). See
@@ -12,9 +14,14 @@ import { PushNotificationBootstrap } from '@/components/layout/PushNotificationB
 export default function App() {
   return (
     <IncomingOrderProvider>
-      <PushNotificationBootstrap />
-      <FullScreenOrderAlert />
-      <AppRoutes />
+      {/* App-wide rider runtime (online status, GPS pings, order polling, assignments) - lives here,
+          not in HomePage, so it keeps running whichever tab is open. */}
+      <RiderSessionProvider>
+        <PushNotificationBootstrap />
+        <FullScreenOrderAlert />
+        <AssignedOrderAlert />
+        <AppRoutes />
+      </RiderSessionProvider>
     </IncomingOrderProvider>
   )
 }

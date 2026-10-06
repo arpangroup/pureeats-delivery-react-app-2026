@@ -5,6 +5,7 @@ import { PageHeader } from '@/components/layout/PageHeader'
 import { LoadingBlock, EmptyState, Badge } from '@/components/ui/Feedback'
 import { TextInput } from '@/components/ui/FormControls'
 import { deliveryOrderService } from '@/services/deliveryOrderService'
+import { useRiderSession } from '@/context/RiderSessionContext'
 import { formatCurrency } from '@/lib/format'
 import type { ActiveDelivery } from '@/types/entities'
 
@@ -16,28 +17,28 @@ function mapsUrl(lat: number, lng: number): string {
 
 export default function ActiveDeliveryPage() {
   const navigate = useNavigate()
-  const [delivery, setDelivery] = useState<ActiveDelivery | null | undefined>(undefined)
+  const { activeDeliveries, refreshActiveDeliveries } = useRiderSession()
+  const [selectedId, setSelectedId] = useState<number | null>(null)
+  /** Local copy of the delivery being worked - kept after completion so the "Delivered!" screen can show, even though it has left activeDeliveries. */
+  const [completed, setCompleted] = useState<ActiveDelivery | null>(null)
   const [pin, setPin] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    let cancelled = false
-    deliveryOrderService.getActiveDelivery().then((d) => {
-      if (!cancelled) setDelivery(d)
-    })
-    return () => {
-      cancelled = true
-    }
-  }, [])
+    refreshActiveDeliveries()
+  }, [refreshActiveDeliveries])
+
+  const delivery: ActiveDelivery | null | undefined =
+    completed ?? (activeDeliveries === null ? undefined : activeDeliveries.find((d) => d.id === selectedId) ?? activeDeliveries[0] ?? null)
 
   async function handlePickup() {
     if (!delivery) return
     setBusy(true)
     setError(null)
     try {
-      const updated = await deliveryOrderService.pickup(delivery.id)
-      setDelivery(updated)
+      await deliveryOrderService.pickup(delivery.id)
+      await refreshActiveDeliveries()
     } catch (err) {
       setError((err as { message?: string })?.message ?? 'Could not mark as picked up.')
     } finally {
@@ -51,8 +52,10 @@ export default function ActiveDeliveryPage() {
     setBusy(true)
     setError(null)
     try {
-      const updated = await deliveryOrderService.deliver(delivery.id, pin)
-      setDelivery(updated)
+      await deliveryOrderService.deliver(delivery.id, pin)
+      setCompleted({ ...delivery, status: 'DELIVERED', deliveredAt: new Date().toISOString() })
+      setPin('')
+      refreshActiveDeliveries()
     } catch (err) {
       setError((err as { message?: string })?.message ?? 'Incorrect PIN.')
     } finally {
@@ -97,9 +100,15 @@ export default function ActiveDeliveryPage() {
         <p className="max-w-xs text-sm text-slate-500 dark:text-slate-400">
           You earned {formatCurrency(delivery.payoutEstimate)} for order {delivery.uniqueOrderId}.
         </p>
-        <button className="btn-primary w-full max-w-xs" onClick={() => navigate('/', { replace: true })}>
-          Back to home
-        </button>
+        {(activeDeliveries?.length ?? 0) > 0 ? (
+          <button className="btn-primary w-full max-w-xs" onClick={() => setCompleted(null)}>
+            Next delivery
+          </button>
+        ) : (
+          <button className="btn-primary w-full max-w-xs" onClick={() => navigate('/', { replace: true })}>
+            Back to home
+          </button>
+        )}
       </div>
     )
   }
@@ -110,6 +119,30 @@ export default function ActiveDeliveryPage() {
     <div>
       <PageHeader title="Active delivery" />
       <div className="space-y-4 px-4 py-4 pb-8">
+        {activeDeliveries && activeDeliveries.length > 1 && (
+          <div className="flex gap-2 overflow-x-auto pb-1">
+            {activeDeliveries.map((d) => (
+              <button
+                key={d.id}
+                onClick={() => {
+                  setSelectedId(d.id)
+                  setPin('')
+                  setError(null)
+                }}
+                className={`shrink-0 rounded-full px-3 py-1 text-xs font-semibold ${
+                  d.id === delivery.id ? 'bg-brand-600 text-white' : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300'
+                }`}
+              >
+                {d.uniqueOrderId}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {delivery.assignedBy === 'ADMIN' && (
+          <p className="rounded-lg bg-brand-50 px-3 py-2 text-xs text-brand-700 dark:bg-brand-500/10 dark:text-brand-400">Assigned to you by an admin.</p>
+        )}
+
         <div className="flex items-center justify-between">
           <Badge tone="brand">{isHeadingToRestaurant ? 'Heading to restaurant' : 'Heading to customer'}</Badge>
           <span className="text-xs text-slate-400">{delivery.uniqueOrderId}</span>
@@ -191,7 +224,7 @@ export default function ActiveDeliveryPage() {
           </button>
         )}
 
-        {delivery.status === 'PICKED_UP' && (
+        {(delivery.status === 'PICKED_UP' || delivery.status === 'ON_THE_WAY') && (
           <form onSubmit={handleDeliver} className="card space-y-3 p-4">
             <p className="text-sm font-medium text-slate-700 dark:text-slate-200">Ask the customer for their delivery PIN</p>
             <TextInput
