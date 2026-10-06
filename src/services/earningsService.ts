@@ -63,7 +63,8 @@ function buildMockTrips(): RiderEarning[] {
       if (dayOffset === 0 && at > today) continue
       const total = Math.round(180 + rand() * 600)
       const cod = rand() < 0.35
-      const earning = Math.round(total * 0.1 * 100) / 100
+      const tip = rand() < 0.3 ? [10, 20, 30][Math.floor(rand() * 3)] : 0
+      const earning = Math.round((total * 0.1 + tip) * 100) / 100
       trips.push({
         tripId: id,
         orderId: 5000 + id,
@@ -80,6 +81,7 @@ function buildMockTrips(): RiderEarning[] {
         commissionBase: total,
         rateIsCurrent: false,
         earning,
+        tipAmount: tip,
         codCollected: cod ? total : 0,
         settled: dayOffset > 6,
         settlementId: dayOffset > 6 ? Math.floor(dayOffset / 7) : null,
@@ -257,6 +259,7 @@ function nEarning(e: RiderEarning): RiderEarning {
     commissionRate: e.commissionRate == null ? null : toNumber(e.commissionRate),
     commissionBase: e.commissionBase == null ? null : toNumber(e.commissionBase),
     earning: toNumber(e.earning),
+    tipAmount: toNumber(e.tipAmount ?? 0),
     codCollected: toNumber(e.codCollected),
   }
 }

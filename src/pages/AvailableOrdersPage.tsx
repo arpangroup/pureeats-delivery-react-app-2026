@@ -7,9 +7,10 @@ import { SwipeToAcceptButton } from '@/components/ui/SwipeToAcceptButton'
 import { deliveryOrderService } from '@/services/deliveryOrderService'
 import { useRiderSession } from '@/context/RiderSessionContext'
 import { useOnResume } from '@/hooks/useOnResume'
-import { formatCurrency, timeAgo } from '@/lib/format'
+import { timeAgo } from '@/lib/format'
 import type { AvailableOrder } from '@/types/entities'
 import { showErrorToast } from '@/lib/errorToast'
+import { OrderTripMetrics } from '@/components/order/OrderTripMetrics'
 
 const REFRESH_INTERVAL_MS = 10000
 
@@ -86,19 +87,8 @@ export default function AvailableOrdersPage() {
               <span className="shrink-0 text-[11px] text-slate-400">{timeAgo(order.createdAt)}</span>
             </div>
 
-            <div className="mt-3 grid grid-cols-3 gap-2 text-center">
-              <div className="rounded-lg bg-slate-50 py-1.5 dark:bg-slate-800/60">
-                <p className="text-xs font-bold text-slate-800 dark:text-slate-100">{order.distanceKm} km</p>
-                <p className="text-[10px] text-slate-400">Distance</p>
-              </div>
-              <div className="rounded-lg bg-slate-50 py-1.5 dark:bg-slate-800/60">
-                <p className="text-xs font-bold text-slate-800 dark:text-slate-100">{order.itemsCount}</p>
-                <p className="text-[10px] text-slate-400">Items</p>
-              </div>
-              <div className="rounded-lg bg-slate-50 py-1.5 dark:bg-slate-800/60">
-                <p className="text-xs font-bold text-slate-800 dark:text-slate-100">{formatCurrency(order.payoutEstimate)}</p>
-                <p className="text-[10px] text-slate-400">Payout</p>
-              </div>
+            <div className="mt-3">
+              <OrderTripMetrics order={order} />
             </div>
 
             {acceptError?.orderId === order.id && (

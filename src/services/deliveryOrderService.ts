@@ -1,7 +1,8 @@
 import { apiClient } from '@/lib/apiClient'
 import { mockDelay } from '@/lib/mockUtils'
 import { IS_MOCK } from '@/config/env'
-import { availableOrderTemplates } from '@/mocks/fixtures/availableOrders'
+import { availableOrderTemplates, type AvailableOrderTemplate } from '@/mocks/fixtures/availableOrders'
+import { toNumber } from '@/lib/format'
 import { activeDeliveryDetailById, MOCK_DELIVERY_PIN } from '@/mocks/fixtures/activeDelivery'
 import { deliveryHistory } from '@/mocks/fixtures/history'
 import type { ActiveDelivery, AvailableOrder, DeliveryHistoryEntry } from '@/types/entities'
@@ -20,6 +21,24 @@ function purgeStale() {
   visibleOrders = visibleOrders.filter((o) => now - new Date(o.createdAt).getTime() < VISIBLE_TTL_MS)
 }
 
+/** Mock-only: a deterministic tip for some templates, no server pickup distance (the app computes it from live GPS), drop = route distance. */
+function withMockExtras(t: AvailableOrderTemplate, createdAt: string): AvailableOrder {
+  return { ...t, createdAt, tipAmount: t.tipAmount ?? [0, 20, 30][t.id % 3], pickupDistanceKm: null, dropDistanceKm: t.distanceKm }
+}
+
+/** Live responses from a backend that predates tip/pickup/drop fall back to safe defaults; BigDecimals may arrive as strings. */
+function normalizeAvailable(o: AvailableOrder): AvailableOrder {
+  const drop = toNumber(o.dropDistanceKm ?? o.distanceKm)
+  return {
+    ...o,
+    distanceKm: toNumber(o.distanceKm),
+    payoutEstimate: toNumber(o.payoutEstimate),
+    tipAmount: toNumber(o.tipAmount ?? 0),
+    pickupDistanceKm: o.pickupDistanceKm == null ? null : toNumber(o.pickupDistanceKm),
+    dropDistanceKm: drop,
+  }
+}
+
 function maybeAdmitNewOrder() {
   const visibleIds = new Set(visibleOrders.map((o) => o.id))
   const candidates = availableOrderTemplates.filter((t) => !visibleIds.has(t.id))
@@ -28,7 +47,7 @@ function maybeAdmitNewOrder() {
   // 10-20s reliably sees a fresh full-screen alert fire on its own.
   if (Math.random() < 0.45) {
     const template = candidates[Math.floor(Math.random() * candidates.length)]
-    visibleOrders = [{ ...template, createdAt: new Date().toISOString() }, ...visibleOrders]
+    visibleOrders = [withMockExtras(template, new Date().toISOString()), ...visibleOrders]
   }
 }
 
@@ -42,6 +61,7 @@ function normalizeActiveDelivery(d: ActiveDelivery): ActiveDelivery {
     items: d.items ?? [],
     payoutEstimate: Number(d.payoutEstimate ?? 0),
     distanceKm: Number(d.distanceKm ?? 0),
+    tipAmount: Number(d.tipAmount ?? 0),
   }
 }
 
@@ -54,7 +74,7 @@ export const deliveryOrderService = {
       return [...visibleOrders].sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1))
     }
     const { data } = await apiClient.get<{ data: AvailableOrder[] }>('/delivery/orders/available')
-    return data.data
+    return (data.data ?? []).map(normalizeAvailable)
   },
 
   async accept(orderId: number): Promise<ActiveDelivery> {
@@ -80,6 +100,7 @@ export const deliveryOrderService = {
         customerPhone: detail?.customerPhone ?? '9900000000',
         items: detail?.items ?? [{ name: 'Order items', quantity: template.itemsCount }],
         payoutEstimate: template.payoutEstimate,
+        tipAmount: 'tipAmount' in template ? template.tipAmount ?? 0 : 0,
         distanceKm: template.distanceKm,
         createdAt: now,
         acceptedAt: now,

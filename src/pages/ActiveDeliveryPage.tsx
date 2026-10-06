@@ -101,7 +101,7 @@ export default function ActiveDeliveryPage() {
         </span>
         <h2 className="text-lg font-semibold text-slate-800 dark:text-slate-100">Delivered!</h2>
         <p className="max-w-xs text-sm text-slate-500 dark:text-slate-400">
-          You earned {formatCurrency(delivery.payoutEstimate)} for order {delivery.uniqueOrderId}.
+          You earned {formatCurrency(delivery.payoutEstimate + (delivery.tipAmount ?? 0))} for order {delivery.uniqueOrderId}.
         </p>
         {(activeDeliveries?.length ?? 0) > 0 ? (
           <button className="btn-primary w-full max-w-xs" onClick={() => setCompleted(null)}>
@@ -216,6 +216,18 @@ export default function ActiveDeliveryPage() {
             <span className="text-slate-500 dark:text-slate-400">Your payout</span>
             <span className="font-bold text-slate-800 dark:text-slate-100">{formatCurrency(delivery.payoutEstimate)}</span>
           </div>
+          {(delivery.tipAmount ?? 0) > 0 && (
+            <>
+              <div className="mt-1 flex items-center justify-between text-sm">
+                <span className="text-slate-500 dark:text-slate-400">Customer tip</span>
+                <span className="font-bold text-amber-700 dark:text-amber-400">+ {formatCurrency(delivery.tipAmount!)}</span>
+              </div>
+              <div className="mt-1 flex items-center justify-between border-t border-slate-100 pt-2 text-sm dark:border-slate-800">
+                <span className="font-semibold text-slate-700 dark:text-slate-200">You earn</span>
+                <span className="font-bold text-slate-800 dark:text-slate-100">{formatCurrency(delivery.payoutEstimate + (delivery.tipAmount ?? 0))}</span>
+              </div>
+            </>
+          )}
         </div>
 
         {error && <p className="rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-600 dark:bg-rose-500/10 dark:text-rose-400">{error}</p>}
