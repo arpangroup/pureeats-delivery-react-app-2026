@@ -10,6 +10,7 @@ import { installAudioUnlock, startRinging, stopRinging, unlockAudio } from '@/li
 import { readStorage, writeStorage } from '@/lib/storage'
 import type { Coordinates, GeolocationPermissionState } from '@/lib/geolocation'
 import type { ActiveDelivery } from '@/types/entities'
+import { showErrorToast } from '@/lib/errorToast'
 
 const ONLINE_STORAGE_KEY = 'pureeats.rider.isOnline'
 /** Assignment ids the rider has already seen (accepted themself, or acknowledged the "assigned to you" alert for). */
@@ -104,7 +105,9 @@ export function RiderSessionProvider({ children }: { children: ReactNode }) {
       await deliveryStatusService.setOnline(user.id, next)
     } catch (err) {
       setIsOnline(!next) // revert the optimistic flip on failure
-      setError((err as { message?: string })?.message ?? 'Could not update your status.')
+      const message = (err as { message?: string })?.message ?? 'Could not update your status.'
+      setError(message)
+      showErrorToast(message)
     } finally {
       setIsSaving(false)
     }

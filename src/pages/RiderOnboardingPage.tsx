@@ -5,6 +5,7 @@ import { Field, TextInput, Textarea } from '@/components/ui/FormControls'
 import { useAuth } from '@/hooks/useAuth'
 import { riderProfileService } from '@/services/riderProfileService'
 import type { Gender } from '@/types/entities'
+import { showErrorToast } from '@/lib/errorToast'
 
 /**
  * Shown when authenticated but the JWT role isn't yet DELIVERY (see RequireAuth). Collects the
@@ -53,6 +54,7 @@ export default function RiderOnboardingPage() {
       })
       setDone(true)
     } catch (err) {
+      showErrorToast(err)
       setError((err as { message?: string })?.message ?? 'Could not save your rider details.')
     } finally {
       setSubmitting(false)

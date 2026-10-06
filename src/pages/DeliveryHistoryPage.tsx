@@ -5,6 +5,7 @@ import { LoadingBlock, EmptyState, Badge } from '@/components/ui/Feedback'
 import { deliveryOrderService } from '@/services/deliveryOrderService'
 import { formatCurrency, formatDate } from '@/lib/format'
 import type { DeliveryHistoryEntry, OrderStatus } from '@/types/entities'
+import { showErrorToast } from '@/lib/errorToast'
 
 const statusTone: Partial<Record<OrderStatus, 'green' | 'red' | 'slate'>> = {
   DELIVERED: 'green',
@@ -17,9 +18,16 @@ export default function DeliveryHistoryPage() {
 
   useEffect(() => {
     let cancelled = false
-    deliveryOrderService.history().then((list) => {
-      if (!cancelled) setHistory(list)
-    })
+    deliveryOrderService
+      .history()
+      .then((list) => {
+        if (!cancelled) setHistory(list)
+      })
+      .catch((err) => {
+        if (cancelled) return
+        setHistory([])
+        showErrorToast(err, 'Could not load your delivery history.')
+      })
     return () => {
       cancelled = true
     }

@@ -4,20 +4,30 @@
  * two-tone chime synthesized with the Web Audio API - no asset to download or fail to load - when
  * none is set or the file can't be played.
  *
- * Browsers block audio until the page has had a user gesture. {@link installAudioUnlock} listens for
- * the first tap/key press and "unlocks" both a shared AudioContext and the <audio> element there, so
- * later alerts - fired from a poll or a push, with no gesture of their own - are actually audible.
- * Creating a fresh AudioContext per alert (what this used to do) starts it "suspended" outside a
- * gesture, which is why alerts were silent.
+ * The uploaded file is fetched once and decoded into an AudioBuffer, then played through the SAME
+ * AudioContext as the chime. That matters: browsers apply autoplay rules to an <audio> element
+ * separately from Web Audio, so playing the file through an <audio> element (the previous approach)
+ * could be refused - e.g. after a page reload before the next click - while the chime still played,
+ * which is why dashboards kept hearing the default chime despite a custom sound being configured.
+ * Now, whenever the chime would be audible, the custom sound is too. An <audio> element remains only
+ * as a last resort while the file is still downloading/decoding.
+ *
+ * Browsers still need one user gesture per page load before ANY sound: {@link installAudioUnlock}
+ * resumes the shared AudioContext on every tap/key press.
  */
 
 type AudioContextCtor = typeof window.AudioContext
 type SharedAudioContext = InstanceType<AudioContextCtor>
+type SoundSource = ReturnType<SharedAudioContext['createBufferSource']>
+type DecodedSound = Awaited<ReturnType<SharedAudioContext['decodeAudioData']>>
+
+const createAudioElement = () => document.createElement('audio')
 
 let audioContext: SharedAudioContext | null = null
-const createAudioElement = () => document.createElement('audio')
 let audioElement: ReturnType<typeof createAudioElement> | null = null
 let customSoundUrl: string | null = null
+let customBuffer: DecodedSound | null = null
+let currentSource: SoundSource | null = null
 let unlockInstalled = false
 let ringTimer: ReturnType<typeof setInterval> | null = null
 
@@ -34,6 +44,10 @@ function getAudioContext(): SharedAudioContext | null {
   return audioContext
 }
 
+function resumeContext(ctx: SharedAudioContext) {
+  if (ctx.state === 'suspended') ctx.resume().catch(() => undefined)
+}
+
 function getAudioElement(): ReturnType<typeof createAudioElement> {
   if (!audioElement) {
     audioElement = createAudioElement()
@@ -42,15 +56,31 @@ function getAudioElement(): ReturnType<typeof createAudioElement> {
   return audioElement
 }
 
-/** Sets (or clears, with null/blank) the admin-configured sound. Preloads it so the first alert plays without a fetch delay. */
+async function loadCustomBuffer(url: string) {
+  const ctx = getAudioContext()
+  if (!ctx) return
+  try {
+    const response = await window.fetch(url, { mode: 'cors', cache: 'force-cache' })
+    if (!response.ok) throw new Error(`HTTP ${response.status}`)
+    const bytes = await response.arrayBuffer()
+    const buffer = await ctx.decodeAudioData(bytes)
+    if (customSoundUrl === url) customBuffer = buffer
+  } catch (err) {
+    console.warn('[order-sound] could not load custom sound, will fall back', url, err)
+  }
+}
+
+/** Sets (or clears, with null/blank) the admin-configured sound, and starts downloading/decoding it so the first alert plays without delay. */
 export function setCustomOrderSoundUrl(url: string | null | undefined): void {
   const next = url && url.trim() ? url.trim() : null
   if (next === customSoundUrl) return
   customSoundUrl = next
+  customBuffer = null
   const el = getAudioElement()
   if (next) {
     el.src = next
     el.load()
+    void loadCustomBuffer(next)
   } else {
     el.removeAttribute('src')
   }
@@ -63,24 +93,10 @@ export function getCustomOrderSoundUrl(): string | null {
 /** Call inside a user-gesture handler (or let {@link installAudioUnlock} do it) to allow later, gesture-less playback. */
 export function unlockAudio(): void {
   const ctx = getAudioContext()
-  if (ctx && ctx.state === 'suspended') ctx.resume().catch(() => undefined)
-  const el = getAudioElement()
-  if (customSoundUrl && el.paused) {
-    // Play muted for an instant - this is what grants the element autoplay permission on iOS/Chrome.
-    el.muted = true
-    el.play()
-      .then(() => {
-        el.pause()
-        el.currentTime = 0
-        el.muted = false
-      })
-      .catch(() => {
-        el.muted = false
-      })
-  }
+  if (ctx) resumeContext(ctx)
 }
 
-/** Installs one-time-ish gesture listeners that unlock audio. Safe to call repeatedly. */
+/** Installs gesture listeners that unlock audio. Safe to call repeatedly. */
 export function installAudioUnlock(): void {
   if (unlockInstalled || typeof window === 'undefined') return
   unlockInstalled = true
@@ -97,7 +113,7 @@ export function playDefaultChime(): void {
   try {
     const ctx = getAudioContext()
     if (!ctx) return
-    if (ctx.state === 'suspended') ctx.resume().catch(() => undefined)
+    resumeContext(ctx)
     const playTone = (frequency: number, startOffset: number, duration: number) => {
       const oscillator = ctx.createOscillator()
       const gain = ctx.createGain()
@@ -121,18 +137,56 @@ export function playDefaultChime(): void {
   }
 }
 
+function stopCurrentSource() {
+  if (currentSource) {
+    try {
+      currentSource.stop()
+    } catch {
+      // already stopped
+    }
+    currentSource = null
+  }
+}
+
+function playBuffer(ctx: SharedAudioContext, buffer: DecodedSound) {
+  resumeContext(ctx)
+  stopCurrentSource()
+  const source = ctx.createBufferSource()
+  source.buffer = buffer
+  source.connect(ctx.destination)
+  source.onended = () => {
+    if (currentSource === source) currentSource = null
+  }
+  source.start()
+  currentSource = source
+}
+
 /** Plays the configured sound once, falling back to the default chime if there is none or it fails. */
 export function playOrderSound(): void {
   if (!customSoundUrl) {
     playDefaultChime()
     return
   }
+  const ctx = getAudioContext()
+  if (ctx && customBuffer) {
+    try {
+      playBuffer(ctx, customBuffer)
+      return
+    } catch (err) {
+      console.warn('[order-sound] Web Audio playback failed, trying <audio>', err)
+    }
+  }
+  // Buffer not decoded yet (or Web Audio unavailable) - try the element, chime as the last resort.
   const el = getAudioElement()
   try {
     el.muted = false
     el.currentTime = 0
     const result = el.play()
-    if (result) result.catch(() => playDefaultChime())
+    if (result)
+      result.catch((err) => {
+        console.warn('[order-sound] <audio> playback refused, playing default chime', err)
+        playDefaultChime()
+      })
   } catch {
     playDefaultChime()
   }
@@ -150,6 +204,7 @@ export function stopRinging(): void {
     clearInterval(ringTimer)
     ringTimer = null
   }
+  stopCurrentSource()
   if (audioElement && !audioElement.paused) {
     audioElement.pause()
     audioElement.currentTime = 0

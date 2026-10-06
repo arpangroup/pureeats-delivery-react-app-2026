@@ -4,6 +4,7 @@ import { FullScreenOrderAlert } from '@/components/order/FullScreenOrderAlert'
 import { PushNotificationBootstrap } from '@/components/layout/PushNotificationBootstrap'
 import { RiderSessionProvider } from '@/context/RiderSessionContext'
 import { AssignedOrderAlert } from '@/components/order/AssignedOrderAlert'
+import { ErrorToaster } from '@/components/ui/ErrorToaster'
 
 // Provider tree, trimmed to what a rider app actually needs - no cart/favorites/location/app-config
 // providers like the customer app (none of that is shopping-specific state this app has). See
@@ -21,6 +22,7 @@ export default function App() {
         <FullScreenOrderAlert />
         <AssignedOrderAlert />
         <AppRoutes />
+        <ErrorToaster />
       </RiderSessionProvider>
     </IncomingOrderProvider>
   )

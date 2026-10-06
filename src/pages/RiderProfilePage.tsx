@@ -7,6 +7,7 @@ import { riderProfileService } from '@/services/riderProfileService'
 import { initials } from '@/lib/format'
 import { IS_MOCK } from '@/config/env'
 import type { RiderProfile } from '@/types/entities'
+import { showErrorToast } from '@/lib/errorToast'
 
 const menuItems = [
   { to: '/profile/edit', label: 'Edit profile', icon: Bike },
@@ -21,9 +22,14 @@ export default function RiderProfilePage() {
   useEffect(() => {
     if (!user) return
     let cancelled = false
-    riderProfileService.getMyProfile(user.id).then((p) => {
-      if (!cancelled) setProfile(p)
-    })
+    riderProfileService
+      .getMyProfile(user.id)
+      .then((p) => {
+        if (!cancelled) setProfile(p)
+      })
+      .catch((err) => {
+        if (!cancelled) showErrorToast(err, 'Could not load your profile.')
+      })
     return () => {
       cancelled = true
     }
