@@ -15,6 +15,7 @@ import DeliveryHistoryPage from '@/pages/DeliveryHistoryPage'
 import RiderProfilePage from '@/pages/RiderProfilePage'
 import EditRiderProfilePage from '@/pages/EditRiderProfilePage'
 import WalletPage from '@/pages/WalletPage'
+import EarningsPage from '@/pages/EarningsPage'
 
 export function AppRoutes() {
   return (
@@ -43,6 +44,7 @@ export function AppRoutes() {
         <Route path="/profile" element={<RiderProfilePage />} />
         <Route path="/profile/edit" element={<EditRiderProfilePage />} />
         <Route path="/profile/wallet" element={<WalletPage />} />
+        <Route path="/earnings" element={<EarningsPage />} />
       </Route>
 
       <Route path="*" element={<Navigate to="/" replace />} />
