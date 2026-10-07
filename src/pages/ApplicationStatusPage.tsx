@@ -38,8 +38,8 @@ export function ApplicationStatusPage({ profile, onChanged, onRefresh }: { profi
             phone={profile.phone || user.phone || ''}
             existing={profile}
             submitLabel="Resubmit application"
-            onSubmit={async (application, licensePhoto) => {
-              onChanged(await riderProfileService.submitApplication(user.id, application, licensePhoto, true))
+            onSubmit={async (application, licensePhoto, profilePhoto) => {
+              onChanged(await riderProfileService.submitApplication(user.id, application, licensePhoto, true, profilePhoto))
               setEditing(false)
             }}
           />
