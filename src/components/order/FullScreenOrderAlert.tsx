@@ -8,6 +8,7 @@ import { SwipeToAcceptButton } from '@/components/ui/SwipeToAcceptButton'
 import { startRinging, stopRinging } from '@/lib/orderSound'
 import { showErrorToast } from '@/lib/errorToast'
 import { OrderTripMetrics } from '@/components/order/OrderTripMetrics'
+import { OrderStatusBadge, PaymentBadge, PickupCountdown } from '@/components/order/OrderMeta'
 
 const ALERT_DURATION_S = INCOMING_ORDER_ALERT_MS / 1000
 const RING_RADIUS = 26
@@ -93,7 +94,7 @@ export function FullScreenOrderAlert() {
       <div className="flex items-center justify-between pt-4">
         <div>
           <p className="text-xs font-semibold uppercase tracking-widest text-brand-400">New order</p>
-          <p className="text-2xl font-bold">{incomingOrder.uniqueOrderId}</p>
+          <p className="font-mono text-2xl font-bold tracking-wide">#{incomingOrder.uniqueOrderId}</p>
         </div>
         <div className="relative flex h-16 w-16 items-center justify-center">
           <svg viewBox="0 0 64 64" className="absolute inset-0 -rotate-90">
@@ -115,7 +116,13 @@ export function FullScreenOrderAlert() {
         </div>
       </div>
 
-      <div className="mt-8 flex-1">
+      <div className="mt-3 flex flex-wrap items-center gap-2">
+        <PaymentBadge mode={incomingOrder.paymentMode} dark />
+        {incomingOrder.orderStatus && <OrderStatusBadge status={incomingOrder.orderStatus} dark />}
+        <PickupCountdown dueAt={incomingOrder.pickupDueAt} dark />
+      </div>
+
+      <div className="mt-5 flex-1">
         <div className="rounded-2xl bg-white/5 p-4">
           <div className="flex gap-3">
             <div className="flex flex-col items-center pt-1">

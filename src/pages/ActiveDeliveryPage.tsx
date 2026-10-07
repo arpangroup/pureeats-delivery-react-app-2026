@@ -1,13 +1,16 @@
-import { useEffect, useState, type FormEvent } from 'react'
-import { useNavigate } from 'react-router-dom'
-import { Store, MapPin, Navigation, Phone, PackageCheck, Loader2 } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { Link, useNavigate } from 'react-router-dom'
+import { Store, MapPin, Navigation, Phone, PackageCheck, Camera, ChefHat, Banknote } from 'lucide-react'
 import { PageHeader } from '@/components/layout/PageHeader'
-import { LoadingBlock, EmptyState, Badge } from '@/components/ui/Feedback'
+import { LoadingBlock, EmptyState } from '@/components/ui/Feedback'
 import { TextInput } from '@/components/ui/FormControls'
-import { deliveryOrderService } from '@/services/deliveryOrderService'
+import { SwipeToAcceptButton } from '@/components/ui/SwipeToAcceptButton'
+import { OrderIdTag, OrderStatusBadge, PaymentBadge, PickupCountdown } from '@/components/order/OrderMeta'
+import { deliveryOrderService, MAX_PICKUP_PHOTOS, paymentLabel } from '@/services/deliveryOrderService'
 import { useRiderSession } from '@/context/RiderSessionContext'
+import { useDriverSettings } from '@/hooks/useDriverSettings'
 import { formatCurrency } from '@/lib/format'
-import type { ActiveDelivery } from '@/types/entities'
+import type { ActiveDelivery, OrderStatus } from '@/types/entities'
 import { showErrorToast } from '@/lib/errorToast'
 
 /** Deep-links out to the phone's own maps app instead of embedding a map - this app has no
@@ -16,9 +19,15 @@ function mapsUrl(lat: number, lng: number): string {
   return `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`
 }
 
+/** Statuses after the food has left the restaurant. */
+const OUT_FOR_DELIVERY: OrderStatus[] = ['PICKED_UP', 'ON_THE_WAY', 'ARRIVED']
+/** While waiting for the kitchen, re-check readiness this often (the app-wide poll is slower). */
+const READY_POLL_MS = 5000
+
 export default function ActiveDeliveryPage() {
   const navigate = useNavigate()
   const { activeDeliveries, refreshActiveDeliveries } = useRiderSession()
+  const { showPayout } = useDriverSettings()
   const [selectedId, setSelectedId] = useState<number | null>(null)
   /** Local copy of the delivery being worked - kept after completion so the "Delivered!" screen can show, even though it has left activeDeliveries. */
   const [completed, setCompleted] = useState<ActiveDelivery | null>(null)
@@ -33,23 +42,29 @@ export default function ActiveDeliveryPage() {
   const delivery: ActiveDelivery | null | undefined =
     completed ?? (activeDeliveries === null ? undefined : activeDeliveries.find((d) => d.id === selectedId) ?? activeDeliveries[0] ?? null)
 
-  async function handlePickup() {
-    if (!delivery) return
+  const waitingForKitchen = !!delivery && !OUT_FOR_DELIVERY.includes(delivery.status) && delivery.status !== 'DELIVERED' && !delivery.foodReady
+  useEffect(() => {
+    if (!waitingForKitchen) return
+    const id = setInterval(refreshActiveDeliveries, READY_POLL_MS)
+    return () => clearInterval(id)
+  }, [waitingForKitchen, refreshActiveDeliveries])
+
+  async function run(action: () => Promise<unknown>, fallback: string) {
     setBusy(true)
     setError(null)
     try {
-      await deliveryOrderService.pickup(delivery.id)
+      await action()
       await refreshActiveDeliveries()
     } catch (err) {
       showErrorToast(err)
-      setError((err as { message?: string })?.message ?? 'Could not mark as picked up.')
+      setError((err as { message?: string })?.message ?? fallback)
+      await refreshActiveDeliveries()
     } finally {
       setBusy(false)
     }
   }
 
-  async function handleDeliver(e: FormEvent) {
-    e.preventDefault()
+  async function handleDeliver() {
     if (!delivery) return
     setBusy(true)
     setError(null)
@@ -101,7 +116,9 @@ export default function ActiveDeliveryPage() {
         </span>
         <h2 className="text-lg font-semibold text-slate-800 dark:text-slate-100">Delivered!</h2>
         <p className="max-w-xs text-sm text-slate-500 dark:text-slate-400">
-          You earned {formatCurrency(delivery.payoutEstimate + (delivery.tipAmount ?? 0))} for order {delivery.uniqueOrderId}.
+          {showPayout
+            ? `You earned ${formatCurrency(delivery.payoutEstimate + (delivery.tipAmount ?? 0))} for order ${delivery.uniqueOrderId}.`
+            : `Order ${delivery.uniqueOrderId} is complete.`}
         </p>
         {(activeDeliveries?.length ?? 0) > 0 ? (
           <button className="btn-primary w-full max-w-xs" onClick={() => setCompleted(null)}>
@@ -116,7 +133,12 @@ export default function ActiveDeliveryPage() {
     )
   }
 
-  const isHeadingToRestaurant = delivery.status === 'RIDER_ASSIGNED'
+  const pickedUp = OUT_FOR_DELIVERY.includes(delivery.status)
+  const isHeadingToRestaurant = !pickedUp
+  const photoCount = delivery.pickupPhotoCount ?? 0
+  const canPickUp = !!delivery.foodReady && photoCount > 0
+  const totalItems = delivery.items.reduce((sum, item) => sum + item.quantity, 0)
+  const isCod = paymentLabel(delivery.paymentMode) === 'COD'
 
   return (
     <div>
@@ -146,9 +168,20 @@ export default function ActiveDeliveryPage() {
           <p className="rounded-lg bg-brand-50 px-3 py-2 text-xs text-brand-700 dark:bg-brand-500/10 dark:text-brand-400">Assigned to you by an admin.</p>
         )}
 
-        <div className="flex items-center justify-between">
-          <Badge tone="brand">{isHeadingToRestaurant ? 'Heading to restaurant' : 'Heading to customer'}</Badge>
-          <span className="text-xs text-slate-400">{delivery.uniqueOrderId}</span>
+        <div className="card space-y-2 p-4">
+          <div className="flex items-center justify-between gap-2">
+            <OrderIdTag id={delivery.uniqueOrderId} />
+            <PaymentBadge mode={delivery.paymentMode} />
+          </div>
+          <div className="flex flex-wrap items-center gap-1.5">
+            <OrderStatusBadge status={delivery.status} />
+            {!pickedUp && <PickupCountdown dueAt={delivery.pickupDueAt} />}
+          </div>
+          {isCod && delivery.payable != null && (
+            <p className="flex items-center gap-1.5 rounded-lg bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-800 dark:bg-amber-500/10 dark:text-amber-300">
+              <Banknote size={16} /> Collect {formatCurrency(delivery.payable)} in cash
+            </p>
+          )}
         </div>
 
         {delivery.mockDeliveryPinHint && (
@@ -202,9 +235,7 @@ export default function ActiveDeliveryPage() {
         </div>
 
         <div className="card p-4">
-          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">
-            Items ({delivery.items.reduce((sum, item) => sum + item.quantity, 0)})
-          </p>
+          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">Items</p>
           <ul className="space-y-1 text-sm text-slate-700 dark:text-slate-200">
             {delivery.items.map((item, index) => (
               <li key={index}>
@@ -212,35 +243,83 @@ export default function ActiveDeliveryPage() {
               </li>
             ))}
           </ul>
-          <div className="mt-3 flex items-center justify-between border-t border-slate-100 pt-3 text-sm dark:border-slate-800">
-            <span className="text-slate-500 dark:text-slate-400">Your payout</span>
-            <span className="font-bold text-slate-800 dark:text-slate-100">{formatCurrency(delivery.payoutEstimate)}</span>
-          </div>
+          <p className="mt-2 border-t border-slate-100 pt-2 text-sm font-semibold text-slate-700 dark:border-slate-800 dark:text-slate-200">
+            Total items: {totalItems}
+          </p>
+          {showPayout && (
+            <div className="mt-3 flex items-center justify-between border-t border-slate-100 pt-3 text-sm dark:border-slate-800">
+              <span className="text-slate-500 dark:text-slate-400">Your payout</span>
+              <span className="font-bold text-slate-800 dark:text-slate-100">{formatCurrency(delivery.payoutEstimate)}</span>
+            </div>
+          )}
           {(delivery.tipAmount ?? 0) > 0 && (
             <>
               <div className="mt-1 flex items-center justify-between text-sm">
                 <span className="text-slate-500 dark:text-slate-400">Customer tip</span>
                 <span className="font-bold text-amber-700 dark:text-amber-400">+ {formatCurrency(delivery.tipAmount!)}</span>
               </div>
-              <div className="mt-1 flex items-center justify-between border-t border-slate-100 pt-2 text-sm dark:border-slate-800">
-                <span className="font-semibold text-slate-700 dark:text-slate-200">You earn</span>
-                <span className="font-bold text-slate-800 dark:text-slate-100">{formatCurrency(delivery.payoutEstimate + (delivery.tipAmount ?? 0))}</span>
-              </div>
+              {showPayout && (
+                <div className="mt-1 flex items-center justify-between border-t border-slate-100 pt-2 text-sm dark:border-slate-800">
+                  <span className="font-semibold text-slate-700 dark:text-slate-200">You earn</span>
+                  <span className="font-bold text-slate-800 dark:text-slate-100">{formatCurrency(delivery.payoutEstimate + (delivery.tipAmount ?? 0))}</span>
+                </div>
+              )}
             </>
           )}
         </div>
 
         {error && <p className="rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-600 dark:bg-rose-500/10 dark:text-rose-400">{error}</p>}
 
-        {delivery.status === 'RIDER_ASSIGNED' && (
-          <button className="btn-primary flex w-full items-center justify-center gap-2" onClick={handlePickup} disabled={busy}>
-            {busy && <Loader2 size={16} className="animate-spin" />}
-            {busy ? 'Marking picked up...' : 'Mark picked up'}
-          </button>
+        {!pickedUp && (
+          <div className="card space-y-3 p-4">
+            {!delivery.foodReady && (
+              <p className="flex items-start gap-2 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:bg-amber-500/10 dark:text-amber-300">
+                <ChefHat size={16} className="mt-0.5 shrink-0" />
+                The restaurant is still preparing this order. You can mark it picked up once the store marks it ready.
+              </p>
+            )}
+            <Link
+              to={`/deliveries/${delivery.id}/pickup-photos`}
+              className={`flex items-center justify-between rounded-xl border px-3 py-3 text-sm font-semibold ${
+                photoCount > 0
+                  ? 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-400'
+                  : 'border-brand-200 bg-brand-50 text-brand-700 dark:border-brand-500/30 dark:bg-brand-500/10 dark:text-brand-400'
+              }`}
+            >
+              <span className="flex items-center gap-2">
+                <Camera size={18} /> {photoCount > 0 ? 'Pickup photos' : 'Take pickup photos'}
+              </span>
+              <span className="text-xs">
+                {photoCount}/{MAX_PICKUP_PHOTOS}
+              </span>
+            </Link>
+            {photoCount === 0 && <p className="text-xs text-slate-500 dark:text-slate-400">At least one photo of the packed order is needed before pickup.</p>}
+            <SwipeToAcceptButton
+              key={`pickup-${delivery.id}`}
+              label={busy ? 'Marking picked up...' : !delivery.foodReady ? 'Waiting for the food' : photoCount === 0 ? 'Take a photo first' : 'Slide to mark picked up'}
+              doneLabel="Picked up!"
+              onAccept={() => run(() => deliveryOrderService.pickup(delivery.id), 'Could not mark as picked up.')}
+              disabled={busy || !canPickUp}
+            />
+          </div>
         )}
 
         {(delivery.status === 'PICKED_UP' || delivery.status === 'ON_THE_WAY') && (
-          <form onSubmit={handleDeliver} className="card space-y-3 p-4">
+          <div className="card space-y-2 p-4">
+            <p className="text-sm font-medium text-slate-700 dark:text-slate-200">At the customer's location?</p>
+            <p className="text-xs text-slate-500 dark:text-slate-400">We'll tell the customer you've arrived.</p>
+            <SwipeToAcceptButton
+              key={`arrived-${delivery.id}`}
+              label={busy ? 'Updating...' : 'Slide when you arrive'}
+              doneLabel="Customer notified"
+              onAccept={() => run(() => deliveryOrderService.arrived(delivery.id), 'Could not update the status.')}
+              disabled={busy}
+            />
+          </div>
+        )}
+
+        {pickedUp && (
+          <div className="card space-y-3 p-4">
             <p className="text-sm font-medium text-slate-700 dark:text-slate-200">Ask the customer for their delivery PIN</p>
             <TextInput
               value={pin}
@@ -249,12 +328,15 @@ export default function ActiveDeliveryPage() {
               inputMode="numeric"
               maxLength={4}
               className="text-center text-xl tracking-[0.5em]"
-              autoFocus
             />
-            <button type="submit" className="btn-primary w-full" disabled={busy || pin.length !== 4}>
-              {busy ? 'Confirming...' : 'Confirm delivery'}
-            </button>
-          </form>
+            <SwipeToAcceptButton
+              key={`deliver-${delivery.id}`}
+              label={busy ? 'Confirming...' : pin.length !== 4 ? 'Enter the 4-digit PIN' : 'Slide to confirm delivery'}
+              doneLabel="Delivered!"
+              onAccept={handleDeliver}
+              disabled={busy || pin.length !== 4}
+            />
+          </div>
         )}
       </div>
     </div>

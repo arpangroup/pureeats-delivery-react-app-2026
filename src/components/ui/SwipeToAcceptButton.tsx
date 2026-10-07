@@ -21,10 +21,13 @@ const ACCEPT_THRESHOLD = 0.85
  */
 export function SwipeToAcceptButton({
   label = 'Swipe to accept',
+  doneLabel = 'Accepted!',
   onAccept,
   disabled = false,
 }: {
   label?: string
+  /** Shown once the swipe completes (e.g. "Picked up!"). */
+  doneLabel?: string
   onAccept: () => void
   disabled?: boolean
 }) {
@@ -104,7 +107,7 @@ export function SwipeToAcceptButton({
       )}
     >
       <span className="pointer-events-none absolute inset-0 flex items-center justify-center text-sm font-semibold text-brand-700 dark:text-brand-400">
-        {accepted ? 'Accepted!' : label}
+        {accepted ? doneLabel : label}
       </span>
       <div
         onPointerDown={handlePointerDown}

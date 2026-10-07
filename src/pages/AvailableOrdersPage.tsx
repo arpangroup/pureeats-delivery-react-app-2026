@@ -11,6 +11,7 @@ import { timeAgo } from '@/lib/format'
 import type { AvailableOrder } from '@/types/entities'
 import { showErrorToast } from '@/lib/errorToast'
 import { OrderTripMetrics } from '@/components/order/OrderTripMetrics'
+import { OrderIdTag, OrderStatusBadge, PaymentBadge, PickupCountdown } from '@/components/order/OrderMeta'
 
 const REFRESH_INTERVAL_MS = 10000
 
@@ -72,6 +73,12 @@ export default function AvailableOrdersPage() {
         {error && <p className="rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-600 dark:bg-rose-500/10 dark:text-rose-400">{error}</p>}
         {orders?.map((order) => (
           <div key={order.id} className="card p-4">
+            <div className="mb-3 flex flex-wrap items-center gap-1.5">
+              <OrderIdTag id={order.uniqueOrderId} />
+              <PaymentBadge mode={order.paymentMode} />
+              {order.orderStatus && <OrderStatusBadge status={order.orderStatus} />}
+              <PickupCountdown dueAt={order.pickupDueAt} compact />
+            </div>
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
                 <div className="flex items-center gap-1.5 text-sm font-semibold text-slate-800 dark:text-slate-100">

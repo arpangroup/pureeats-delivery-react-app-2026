@@ -27,6 +27,7 @@ export type OrderStatus =
   | 'RIDER_ASSIGNED'
   | 'PICKED_UP'
   | 'ON_THE_WAY'
+  | 'ARRIVED'
   | 'DELIVERED'
   | 'SELF_PICKUP_COMPLETED'
   | 'CANCELLED'
@@ -63,6 +64,12 @@ export interface AvailableOrder {
   pickupDistanceKm: number | null
   /** Restaurant -> customer. */
   dropDistanceKm: number
+  /** Kitchen status - RESTAURANT_ACCEPTED, PREPARING or READY_FOR_PICKUP. */
+  orderStatus?: OrderStatus
+  /** COD, RAZORPAY, WALLET... - shown as COD vs Prepaid. */
+  paymentMode?: string | null
+  /** When the food should be ready (acceptance + prep time) - drives the pickup countdown. */
+  pickupDueAt?: string | null
 }
 
 export interface ActiveDeliveryItem {
@@ -101,6 +108,16 @@ export interface ActiveDelivery {
   distanceKm: number
   /** Customer's tip - paid in full on delivery. */
   tipAmount?: number
+  /** COD, RAZORPAY, WALLET... - shown as COD vs Prepaid. */
+  paymentMode?: string | null
+  /** Order total (what a COD customer pays in cash). */
+  payable?: number
+  /** True once the store/admin marked the food ready - pickup is blocked until then. */
+  foodReady?: boolean
+  /** When the food should be ready - drives the pickup countdown. */
+  pickupDueAt?: string | null
+  /** Pickup photos taken so far (1-3 needed before pickup). */
+  pickupPhotoCount?: number
   createdAt: string
   acceptedAt: string | null
   pickedUpAt: string | null
@@ -257,4 +274,17 @@ export interface RiderWalletTransaction {
   orderId: number | null
   uniqueOrderId: string | null
   settlementId: number | null
+}
+
+/** A photo of the packed order taken at pickup. */
+export interface PickupPhoto {
+  id: number
+  url: string
+  takenAt: string
+}
+
+/** GET /delivery/activity - the rider's online/offline changes and sign-ins, newest first. */
+export interface RiderActivity {
+  statusHistory: { online: boolean; reason: 'SELF' | 'INACTIVITY' | 'ADMIN' | null; message: string; at: string }[]
+  loginHistory: { at: string; method: string | null; status: string; device: string | null; location: string }[]
 }
