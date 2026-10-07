@@ -149,10 +149,27 @@ export function EarningDetailSheet({ orderId, onClose, onOpenSettlement }: { ord
   )
 }
 
-export function directionText(s: Pick<RiderSettlement, 'direction' | 'netAmount'>): string {
-  if (s.direction === 'PAID_TO_RIDER') return `Paid to you: ${formatCurrency(Math.abs(s.netAmount))}`
-  if (s.direction === 'COLLECTED_FROM_RIDER') return `You paid in: ${formatCurrency(Math.abs(s.netAmount))}`
-  return 'Settled even - nothing changed hands'
+/**
+ * Settlements collect COD cash and pay earnings separately (never netted). Older settlements netted the two
+ * into one transfer - those (both amounts set, single direction) still read as the net that changed hands.
+ */
+function isLegacyNetted(s: Pick<RiderSettlement, 'direction' | 'earningsAmount' | 'codAmount'>): boolean {
+  return s.direction !== 'BOTH' && s.earningsAmount > 0 && s.codAmount > 0
+}
+
+export function directionText(s: Pick<RiderSettlement, 'direction' | 'netAmount' | 'earningsAmount' | 'codAmount'>): string {
+  if (isLegacyNetted(s)) {
+    if (s.direction === 'PAID_TO_RIDER') return `Paid to you: ${formatCurrency(Math.abs(s.netAmount))}`
+    if (s.direction === 'COLLECTED_FROM_RIDER') return `You paid in: ${formatCurrency(Math.abs(s.netAmount))}`
+    return 'Settled even - nothing changed hands'
+  }
+  const parts = [
+    s.codAmount > 0 ? `You handed over ${formatCurrency(s.codAmount)}` : null,
+    s.earningsAmount > 0 ? `paid to you ${formatCurrency(s.earningsAmount)}` : null,
+  ].filter(Boolean) as string[]
+  if (parts.length === 0) return 'Nothing changed hands'
+  const text = parts.join(' · ')
+  return text.charAt(0).toUpperCase() + text.slice(1)
 }
 
 /** One settlement, with the trips it covered. */
@@ -189,9 +206,9 @@ export function SettlementDetailSheet({ settlementId, onClose, onOpenEarning }: 
           <p className="text-xs text-slate-500 dark:text-slate-400">{formatDate(settlement.createdAt)} · {settlement.tripCount} trip(s)</p>
 
           <div className="mt-4 divide-y divide-slate-100 dark:divide-slate-800">
-            <Row label="Earnings settled" value={formatCurrency(settlement.earningsAmount)} />
-            <Row label="Cash you had collected (COD)" value={`- ${formatCurrency(settlement.codAmount)}`} />
-            <Row label="Net" value={formatCurrency(settlement.netAmount)} strong />
+            <Row label="COD cash handed over" value={formatCurrency(settlement.codAmount)} />
+            <Row label="Earnings paid to you" value={formatCurrency(settlement.earningsAmount)} />
+            {isLegacyNetted(settlement) && <Row label="Net (older settlements were netted)" value={formatCurrency(settlement.netAmount)} strong />}
             {settlement.transactionMode && <Row label="Paid via" value={settlement.transactionMode.replace(/_/g, ' ')} />}
             {settlement.transactionReference && <Row label="Reference" value={<span className="font-mono text-xs">{settlement.transactionReference}</span>} />}
             {settlement.note && <Row label="Note" value={settlement.note} />}

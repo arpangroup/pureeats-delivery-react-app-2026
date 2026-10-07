@@ -19,5 +19,12 @@ export const riderProfilesByUserId: Record<number, RiderProfile> = {
     isNotifiable: true,
     isOnline: false,
     isActive: true,
+    approvalStatus: 'APPROVED',
+    vehicleType: 'BIKE',
+    licenseNumber: 'KA0520190001234',
+    idProofType: 'AADHAAR',
+    idProofNumberMasked: 'XXXXXXXX9012',
+    payoutMethod: 'UPI',
+    upiId: 'demo.rider@okhdfcbank',
   },
 }

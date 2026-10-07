@@ -161,6 +161,39 @@ export interface RiderProfile {
   isNotifiable: boolean
   isOnline: boolean
   isActive: boolean
+  /** Only APPROVED partners can go online and take orders; legacy accounts report APPROVED. */
+  approvalStatus?: ApprovalStatus
+  rejectionReason?: string | null
+  licenseNumber?: string | null
+  licensePhotoUrl?: string | null
+  idProofType?: IdProofType | null
+  idProofNumberMasked?: string | null
+  vehicleType?: VehicleType | null
+  payoutMethod?: PayoutMethod | null
+  bankAccountHolder?: string | null
+  bankAccountNumberMasked?: string | null
+  bankIfsc?: string | null
+  upiId?: string | null
+}
+
+export type ApprovalStatus = 'PENDING' | 'APPROVED' | 'REJECTED'
+export type IdProofType = 'AADHAAR' | 'PAN'
+export type VehicleType = 'BIKE' | 'CYCLE' | 'EV'
+export type PayoutMethod = 'BANK' | 'UPI'
+
+/** What a partner submits to apply (and resubmits after a rejection). */
+export interface PartnerApplication {
+  name: string
+  licenseNumber: string
+  idProofType: IdProofType
+  idProofNumber: string
+  vehicleType: VehicleType
+  vehicleNumber: string
+  payoutMethod: PayoutMethod
+  bankAccountHolder: string
+  bankAccountNumber: string
+  bankIfsc: string
+  upiId: string
 }
 
 export interface WalletTransaction {
@@ -200,7 +233,8 @@ export interface RiderEarning {
   settledAt: string | null
 }
 
-export type SettlementDirection = 'PAID_TO_RIDER' | 'COLLECTED_FROM_RIDER' | 'EVEN'
+/** BOTH = COD cash collected and earnings paid in the same settlement (they're never netted). */
+export type SettlementDirection = 'PAID_TO_RIDER' | 'COLLECTED_FROM_RIDER' | 'EVEN' | 'BOTH'
 
 export interface RiderSettlement {
   id: number
@@ -226,6 +260,11 @@ export interface RiderEarningsSummary {
   unsettledTrips: number
   settledEarnings: number
   lastSettlement: RiderSettlement | null
+  /** Delivered orders not fully settled yet, and what customers paid for them. */
+  openOrders?: number
+  openOrderValue?: number
+  /** COD orders whose cash the rider still holds (cashInHand is their total). */
+  codOrders?: number
 }
 
 export type AnalyticsPeriod = 'DAY' | 'WEEK' | 'MONTH' | 'CUSTOM'
