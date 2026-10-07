@@ -42,7 +42,7 @@ export function AppRoutes() {
         <Route path="/" element={<HomePage />} />
         <Route path="/orders/available" element={<AvailableOrdersPage />} />
         <Route path="/deliveries/active" element={<ActiveDeliveryPage />} />
-        <Route path="/deliveries/:orderId/pickup-photos" element={<PickupPhotosPage />} />
+        <Route path="/deliveries/:orderId/photos/:kind" element={<PickupPhotosPage />} />
         <Route path="/profile/activity" element={<ActivityPage />} />
         <Route path="/deliveries/history" element={<DeliveryHistoryPage />} />
         <Route path="/profile" element={<RiderProfilePage />} />

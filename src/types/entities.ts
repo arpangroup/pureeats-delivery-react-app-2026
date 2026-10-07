@@ -118,6 +118,8 @@ export interface ActiveDelivery {
   pickupDueAt?: string | null
   /** Pickup photos taken so far (1-3 needed before pickup). */
   pickupPhotoCount?: number
+  /** Handover photos taken so far (1-3 needed after arriving, before delivery). */
+  deliveryPhotoCount?: number
   createdAt: string
   acceptedAt: string | null
   pickedUpAt: string | null
@@ -276,7 +278,10 @@ export interface RiderWalletTransaction {
   settlementId: number | null
 }
 
-/** A photo of the packed order taken at pickup. */
+/** pickup = the packed order at the restaurant; delivery = handing it to the customer. */
+export type OrderPhotoKind = 'pickup' | 'delivery'
+
+/** A photo of the order taken by the partner (at pickup or at handover). */
 export interface PickupPhoto {
   id: number
   url: string

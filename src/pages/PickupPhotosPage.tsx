@@ -4,22 +4,25 @@ import { Camera, CameraOff, Loader2, X } from 'lucide-react'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { LoadingBlock } from '@/components/ui/Feedback'
 import { OrderIdTag } from '@/components/order/OrderMeta'
-import { deliveryOrderService, MAX_PICKUP_PHOTOS } from '@/services/deliveryOrderService'
+import { deliveryOrderService, MAX_PICKUP_PHOTOS, paymentLabel } from '@/services/deliveryOrderService'
 import { useRiderSession } from '@/context/RiderSessionContext'
 import { showErrorToast } from '@/lib/errorToast'
-import type { PickupPhoto } from '@/types/entities'
+import { formatCurrency } from '@/lib/format'
+import type { OrderPhotoKind, PickupPhoto } from '@/types/entities'
 
 /** Longest edge of an uploaded shot - keeps uploads well under the backend's 5MB image limit. */
 const MAX_EDGE_PX = 1600
 
 /**
- * Pickup photos of the packed order - camera only (a live camera preview, no file picker, so no
- * gallery or documents), up to 3. The order's items are listed under the camera so the partner can
- * check each one while shooting. At least one photo is required before the order can be marked
- * picked up; the photos show on the admin order details page.
+ * Order photos - camera only (a live camera preview, no file picker, so no gallery or documents), up
+ * to 3. `pickup`: the packed order at the restaurant, required before marking it picked up.
+ * `delivery`: the handover to the customer, required (after Arrived) before confirming delivery.
+ * The order's items are listed under the camera so the partner can check them while shooting; the
+ * photos show on the admin order details page.
  */
 export default function PickupPhotosPage() {
-  const { orderId } = useParams()
+  const { orderId, kind: kindParam } = useParams()
+  const kind: OrderPhotoKind = kindParam === 'delivery' ? 'delivery' : 'pickup'
   const id = Number(orderId)
   const navigate = useNavigate()
   const { activeDeliveries, refreshActiveDeliveries } = useRiderSession()
@@ -35,12 +38,12 @@ export default function PickupPhotosPage() {
 
   const loadPhotos = useCallback(async () => {
     try {
-      setPhotos(await deliveryOrderService.listPickupPhotos(id))
+      setPhotos(await deliveryOrderService.listPhotos(id, kind))
     } catch (err) {
       showErrorToast(err, 'Could not load the photos.')
       setPhotos([])
     }
-  }, [id])
+  }, [id, kind])
 
   useEffect(() => {
     loadPhotos()
@@ -100,7 +103,7 @@ export default function PickupPhotosPage() {
     if (!blob) return
     setUploading(true)
     try {
-      await deliveryOrderService.uploadPickupPhoto(id, blob)
+      await deliveryOrderService.uploadPhoto(id, kind, blob)
       await loadPhotos()
       refreshActiveDeliveries()
     } catch (err) {
@@ -113,7 +116,7 @@ export default function PickupPhotosPage() {
   async function remove(photoId: number) {
     setRemovingId(photoId)
     try {
-      await deliveryOrderService.deletePickupPhoto(id, photoId)
+      await deliveryOrderService.deletePhoto(id, kind, photoId)
       await loadPhotos()
       refreshActiveDeliveries()
     } catch (err) {
@@ -127,7 +130,7 @@ export default function PickupPhotosPage() {
 
   return (
     <div>
-      <PageHeader title="Pickup photos" />
+      <PageHeader title={kind === 'delivery' ? 'Delivery photo' : 'Pickup photos'} />
       <div className="space-y-4 px-4 py-4 pb-8">
         <div className="flex items-center justify-between">
           {delivery && <OrderIdTag id={delivery.uniqueOrderId} />}
@@ -192,7 +195,15 @@ export default function PickupPhotosPage() {
 
         {delivery && (
           <div className="card p-4">
-            <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">Check the items</p>
+            {kind === 'delivery' && (
+              <p className="mb-3 rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-600 dark:bg-slate-800/60 dark:text-slate-300">
+                Take the photo as you hand the order over (the bag at the door, or with the customer).
+                {paymentLabel(delivery.paymentMode) === 'COD' && delivery.payable != null && (
+                  <span className="mt-1 block font-semibold text-amber-700 dark:text-amber-400">Collect {formatCurrency(delivery.payable)} in cash.</span>
+                )}
+              </p>
+            )}
+            <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">{kind === 'delivery' ? 'Handing over' : 'Check the items'}</p>
             <ul className="space-y-1 text-sm text-slate-700 dark:text-slate-200">
               {delivery.items.map((item, index) => (
                 <li key={index}>
