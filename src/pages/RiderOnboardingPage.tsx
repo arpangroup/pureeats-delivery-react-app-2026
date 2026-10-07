@@ -1,6 +1,8 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { CheckCircle2 } from 'lucide-react'
+import { LoadingBlock } from '@/components/ui/Feedback'
+import type { RiderProfile } from '@/types/entities'
 import { useAuth } from '@/hooks/useAuth'
 import { riderProfileService } from '@/services/riderProfileService'
 import { PartnerApplicationForm } from '@/components/onboarding/PartnerApplicationForm'
@@ -16,6 +18,19 @@ export default function RiderOnboardingPage() {
   const { user, logout } = useAuth()
   const navigate = useNavigate()
   const [done, setDone] = useState(false)
+  /**
+   * An application saved by an earlier attempt (e.g. its photo upload failed): continue it - prefilled, with
+   * the mobile number already verified - instead of starting over (which used to fail with "already exists").
+   */
+  const [existing, setExisting] = useState<RiderProfile | null | undefined>(undefined)
+
+  useEffect(() => {
+    if (!user) return
+    riderProfileService
+      .getMyProfile(user.id)
+      .then((p) => setExisting(p))
+      .catch(() => setExisting(null))
+  }, [user])
 
   if (!user) {
     navigate('/login', { replace: true })
@@ -48,18 +63,24 @@ export default function RiderOnboardingPage() {
     <div className="mx-auto max-w-md px-5 py-8 pb-safe">
       <h1 className="text-xl font-bold text-slate-800 dark:text-slate-100">Become a delivery partner</h1>
       <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">We need a few details to verify you. Your ID and bank details are only seen by the PureEats team.</p>
-      <div className="card mt-6 p-4">
-        <PartnerApplicationForm
-          userId={user.id}
-          defaultName={user.name}
-          phone={user.phone ?? ''}
-          submitLabel="Submit application"
-          onSubmit={async (application, licensePhoto) => {
-            await riderProfileService.submitApplication(user.id, application, licensePhoto, false)
-            setDone(true)
-          }}
-        />
-      </div>
+      {existing === undefined ? (
+        <LoadingBlock />
+      ) : (
+        <div className="card mt-6 p-4">
+          {existing && <p className="mb-4 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:bg-amber-500/10 dark:text-amber-300">We saved your details earlier - finish and submit again.</p>}
+          <PartnerApplicationForm
+            userId={user.id}
+            defaultName={existing?.name ?? user.name}
+            phone={existing?.phone || user.phone || ''}
+            existing={existing}
+            submitLabel="Submit application"
+            onSubmit={async (application, licensePhoto) => {
+              await riderProfileService.submitApplication(user.id, application, licensePhoto, !!existing)
+              setDone(true)
+            }}
+          />
+        </div>
+      )}
     </div>
   )
 }

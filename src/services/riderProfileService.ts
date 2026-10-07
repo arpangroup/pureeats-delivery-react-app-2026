@@ -5,6 +5,19 @@ import { users } from '@/mocks/fixtures/users'
 import { riderProfilesByUserId } from '@/mocks/fixtures/riderProfile'
 import type { Gender, PartnerApplication, RiderProfile } from '@/types/entities'
 
+/** One group of document/payout fields to change (only what's sent changes). */
+export interface DocumentChanges {
+  licenseNumber?: string
+  idProofType?: 'AADHAAR' | 'PAN'
+  idProofNumber?: string
+  vehicleType?: 'BIKE' | 'CYCLE' | 'EV'
+  payoutMethod?: 'BANK' | 'UPI'
+  bankAccountHolder?: string
+  bankAccountNumber?: string
+  bankIfsc?: string
+  upiId?: string
+}
+
 export interface RiderProfileInput {
   name?: string
   vehicleNumber: string
@@ -138,14 +151,54 @@ export const riderProfileService = {
       if (user) user.role = 'delivery-guy'
       return profile
     }
-    const { data } = resubmit
-      ? await apiClient.put<{ data: RiderProfile }>('/users/me/rider-profile', body)
-      : await apiClient.post<{ data: RiderProfile }>('/users/me/rider-profile', body)
-    if (!licensePhoto) return data.data
+    let saved: RiderProfile
+    try {
+      saved = resubmit
+        ? (await apiClient.put<{ data: RiderProfile }>('/users/me/rider-profile', body)).data.data
+        : (await apiClient.post<{ data: RiderProfile }>('/users/me/rider-profile', body)).data.data
+    } catch (err) {
+      // An earlier attempt already saved the details (e.g. its photo upload failed) - update them instead.
+      if (!resubmit && (err as { status?: number })?.status === 409) {
+        saved = (await apiClient.put<{ data: RiderProfile }>('/users/me/rider-profile', body)).data.data
+      } else {
+        throw err
+      }
+    }
+    if (!licensePhoto) return saved
     const form = new FormData()
     form.append('file', licensePhoto)
-    const photo = await apiClient.post<{ data: RiderProfile }>('/users/me/rider-profile/license-photo', form)
-    return photo.data.data
+    try {
+      const photo = await apiClient.post<{ data: RiderProfile }>('/users/me/rider-profile/license-photo', form)
+      return photo.data.data
+    } catch (err) {
+      const reason = (err as { message?: string })?.message
+      throw {
+        message: `Your details are saved, but the licence photo didn't upload${reason && reason !== 'Network Error' ? ` (${reason})` : ''}. Tap Submit again to retry.`,
+      }
+    }
+  },
+
+  /** Changes one group of documents/payout details - allowed only when Settings -> Profile editing permits it. */
+  async updateDocuments(profile: RiderProfile, changes: DocumentChanges): Promise<RiderProfile> {
+    if (IS_MOCK) {
+      await mockDelay()
+      const updated: RiderProfile = { ...profile, ...changes, idProofNumberMasked: changes.idProofNumber ? changes.idProofNumber.slice(-4).padStart(changes.idProofNumber.length, 'X') : profile.idProofNumberMasked }
+      riderProfilesByUserId[profile.userId] = updated
+      return updated
+    }
+    const { data } = await apiClient.put<{ data: RiderProfile }>('/users/me/rider-profile', { vehicleNumber: profile.vehicleNumber, ...changes })
+    return data.data
+  },
+
+  async uploadLicensePhoto(photo: File): Promise<RiderProfile> {
+    if (IS_MOCK) {
+      await mockDelay()
+      throw { message: 'Licence photo upload needs the live backend.' }
+    }
+    const form = new FormData()
+    form.append('file', photo)
+    const { data } = await apiClient.post<{ data: RiderProfile }>('/users/me/rider-profile/license-photo', form)
+    return data.data
   },
 
   /** Separate multipart action, mirroring the customer app's own profile-photo upload - a file is

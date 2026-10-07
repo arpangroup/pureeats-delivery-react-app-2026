@@ -11,6 +11,7 @@ import { IS_MOCK } from '@/config/env'
 import type { Gender, RiderProfile } from '@/types/entities'
 import { showErrorToast } from '@/lib/errorToast'
 import { useDriverSettings } from '@/hooks/useDriverSettings'
+import { PartnerDocumentsCard } from '@/components/onboarding/PartnerDocumentsCard'
 
 type ContactField = 'phone' | 'email'
 
@@ -330,6 +331,8 @@ export default function EditRiderProfilePage() {
             </div>
           </div>
         )}
+
+        {profile && <PartnerDocumentsCard profile={profile} onChanged={setProfile} />}
 
         <div className="card mt-4 divide-y divide-slate-100 px-4 dark:divide-slate-800">
           <ContactChangeCard field="phone" userId={user.id} currentValue={phone} onChanged={setPhone} editable={can.phone} />
