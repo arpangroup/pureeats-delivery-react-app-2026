@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { ShieldOff } from 'lucide-react'
 import { takeSignedOutNotice } from '@/lib/sessionEnd'
 
-/** Shown on the sign-in page after the app signed the user out because their account was blocked. */
+/** Shown on the sign-in page after the app signed the user out (account blocked/deleted, or signed out of all devices). */
 export function SignedOutNotice() {
   const [notice] = useState(takeSignedOutNotice)
   if (!notice) return null

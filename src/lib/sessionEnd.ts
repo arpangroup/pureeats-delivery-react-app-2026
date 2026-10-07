@@ -4,6 +4,10 @@ import { removeStorage } from '@/lib/storage'
 const NOTICE_KEY = 'pureeats.signedOutNotice'
 /** Backend errorCode for a user blocked/deactivated by an admin (see AccountAccessGuard). */
 export const ACCOUNT_BLOCKED = 'ACCOUNT_BLOCKED'
+/** Every token issued before the user chose "log out of all devices" is rejected with this. */
+export const SESSION_REVOKED = 'SESSION_REVOKED'
+/** Error codes that end the session immediately, with the server's message shown on the sign-in page. */
+export const FORCED_SIGN_OUT_CODES = [ACCOUNT_BLOCKED, SESSION_REVOKED]
 
 let ending = false
 
