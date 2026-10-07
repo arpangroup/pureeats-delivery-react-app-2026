@@ -139,6 +139,7 @@ export const deliveryOrderService = {
         payable: Math.round(template.payoutEstimate * 8),
         pickupDueAt: tpl.pickupDueAt ?? new Date(Date.now() + 10 * 60_000).toISOString(),
         pickupPhotoCount: 0,
+        orderComment: template.id % 2 === 0 ? 'Please ring the bell twice - the baby is asleep.' : null,
         restaurantName: template.restaurantName,
         restaurantAddress: template.restaurantAddress,
         restaurantLat: template.restaurantLat,

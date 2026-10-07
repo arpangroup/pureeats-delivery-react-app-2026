@@ -120,6 +120,8 @@ export interface ActiveDelivery {
   pickupPhotoCount?: number
   /** Handover photos taken so far (1-3 needed after arriving, before delivery). */
   deliveryPhotoCount?: number
+  /** The customer's note for the order (e.g. "leave at the door"), or null. */
+  orderComment?: string | null
   createdAt: string
   acceptedAt: string | null
   pickedUpAt: string | null

@@ -4,6 +4,7 @@ import { getDeviceId } from '@/lib/deviceId'
 import { readStorage, removeStorage, writeStorage } from '@/lib/storage'
 import type { ApiError } from '@/types/common'
 import type { AuthTokenResponse } from '@/types/auth'
+import { endSession, FORCED_SIGN_OUT_CODES } from '@/lib/sessionEnd'
 
 // This is the ONLY place that knows how to talk to the real backend - the same Spring Boot app the
 // customer and admin apps talk to. Every service in src/services/* calls through here when
@@ -64,6 +65,13 @@ apiClient.interceptors.response.use(
     const config = error.config as RetriableConfig | undefined
     const isRefreshCall = config?.url === '/auth/refresh'
 
+    // Blocked/deleted by an admin, or signed out of all devices: sign out right away (sessions are revoked server-side).
+    const body = error.response?.data as { errorCode?: string; message?: string } | undefined
+    if (!IS_MOCK && body?.errorCode && FORCED_SIGN_OUT_CODES.includes(body.errorCode) && readStorage<string | null>(AUTH_TOKEN_STORAGE_KEY, null)) {
+      endSession(body.message ?? 'You have been signed out. Please sign in again.')
+      return Promise.reject({ message: body.message ?? 'You have been signed out.', status: error.response?.status } as ApiError)
+    }
+
     if (!IS_MOCK && error.response?.status === 401 && config && !config._retry && !isRefreshCall) {
       config._retry = true
       const newAccessToken = await refreshAccessToken()
@@ -71,6 +79,8 @@ apiClient.interceptors.response.use(
         config.headers.Authorization = `Bearer ${newAccessToken}`
         return apiClient(config)
       }
+      // Only end a session that existed - a signed-out request that 401s (e.g. a wrong OTP) shouldn't reload.
+      if (readStorage<string | null>(AUTH_TOKEN_STORAGE_KEY, null)) endSession()
       removeStorage(AUTH_TOKEN_STORAGE_KEY)
       removeStorage(AUTH_REFRESH_TOKEN_STORAGE_KEY)
       removeStorage(AUTH_USER_STORAGE_KEY)
