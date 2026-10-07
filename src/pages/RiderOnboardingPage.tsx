@@ -74,8 +74,8 @@ export default function RiderOnboardingPage() {
             phone={existing?.phone || user.phone || ''}
             existing={existing}
             submitLabel="Submit application"
-            onSubmit={async (application, licensePhoto) => {
-              await riderProfileService.submitApplication(user.id, application, licensePhoto, !!existing)
+            onSubmit={async (application, licensePhoto, profilePhoto) => {
+              await riderProfileService.submitApplication(user.id, application, licensePhoto, !!existing, profilePhoto)
               setDone(true)
             }}
           />

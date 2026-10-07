@@ -110,7 +110,7 @@ export const riderProfileService = {
    * Applies to become a delivery partner (or resubmits after a rejection): licence, ID proof, vehicle and
    * payout details, then the licence photo. The application waits for admin approval (status PENDING).
    */
-  async submitApplication(userId: number, application: PartnerApplication, licensePhoto: File | null, resubmit: boolean): Promise<RiderProfile> {
+  async submitApplication(userId: number, application: PartnerApplication, licensePhoto: File | null, resubmit: boolean, profilePhoto: File | null = null): Promise<RiderProfile> {
     const body = {
       name: application.name.trim(),
       vehicleNumber: application.vehicleNumber.trim(),
@@ -138,6 +138,7 @@ export const riderProfileService = {
         rejectionReason: null,
         licenseNumber: body.licenseNumber,
         licensePhotoUrl: licensePhoto ? URL.createObjectURL(licensePhoto) : riderProfilesByUserId[userId]?.licensePhotoUrl ?? null,
+        photo: profilePhoto ? URL.createObjectURL(profilePhoto) : riderProfilesByUserId[userId]?.photo ?? null,
         idProofType: body.idProofType,
         idProofNumberMasked: body.idProofNumber.slice(-4).padStart(body.idProofNumber.length, 'X'),
         vehicleType: body.vehicleType,
@@ -164,18 +165,20 @@ export const riderProfileService = {
         throw err
       }
     }
-    if (!licensePhoto) return saved
-    const form = new FormData()
-    form.append('file', licensePhoto)
-    try {
-      const photo = await apiClient.post<{ data: RiderProfile }>('/users/me/rider-profile/license-photo', form)
-      return photo.data.data
-    } catch (err) {
-      const reason = (err as { message?: string })?.message
-      throw {
-        message: `Your details are saved, but the licence photo didn't upload${reason && reason !== 'Network Error' ? ` (${reason})` : ''}. Tap Submit again to retry.`,
+    // Photos go up after the details are saved; a failed upload says so (the details are kept - Submit again retries).
+    const upload = async (path: string, file: File, label: string) => {
+      const form = new FormData()
+      form.append('file', file)
+      try {
+        saved = (await apiClient.post<{ data: RiderProfile }>(path, form)).data.data
+      } catch (err) {
+        const reason = (err as { message?: string })?.message
+        throw { message: `Your details are saved, but your ${label} didn't upload${reason && reason !== 'Network Error' ? ` (${reason})` : ''}. Tap Submit again to retry.` }
       }
     }
+    if (licensePhoto) await upload('/users/me/rider-profile/license-photo', licensePhoto, 'licence photo')
+    if (profilePhoto) await upload('/users/me/rider-profile/photo', profilePhoto, 'photo')
+    return saved
   },
 
   /** Changes one group of documents/payout details - allowed only when Settings -> Profile editing permits it. */
