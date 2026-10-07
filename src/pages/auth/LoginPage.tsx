@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from 'react'
+import { SignedOutNotice } from '@/components/auth/SignedOutNotice'
 import { useLocation, useNavigate, Link } from 'react-router-dom'
 import { Mail, Phone } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
@@ -62,6 +63,7 @@ export default function LoginPage() {
         </button>
       </div>
 
+      <SignedOutNotice />
       <form onSubmit={handleSubmit} className="space-y-4">
         {method === 'EMAIL' ? (
           <Field label="Email" required>

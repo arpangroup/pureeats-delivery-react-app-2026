@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { Store, MapPin, Navigation, Phone, PackageCheck, Camera, ChefHat, Banknote } from 'lucide-react'
+import { Store, MapPin, Navigation, Phone, PackageCheck, Camera, ChefHat, Banknote, StickyNote } from 'lucide-react'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { LoadingBlock, EmptyState } from '@/components/ui/Feedback'
 import { TextInput } from '@/components/ui/FormControls'
@@ -184,6 +184,16 @@ export default function ActiveDeliveryPage() {
             </p>
           )}
         </div>
+
+        {delivery.orderComment && (
+          <div className="flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5 text-sm text-amber-900 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200">
+            <StickyNote size={16} className="mt-0.5 shrink-0" />
+            <div>
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-amber-700 dark:text-amber-400">Customer note</p>
+              <p>{delivery.orderComment}</p>
+            </div>
+          </div>
+        )}
 
         {delivery.mockDeliveryPinHint && (
           <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-700 dark:bg-amber-500/10 dark:text-amber-400">

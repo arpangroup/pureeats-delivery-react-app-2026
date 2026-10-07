@@ -1,4 +1,5 @@
-import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from 'react'
+import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
+import { apiClient } from '@/lib/apiClient'
 import { AUTH_REFRESH_TOKEN_STORAGE_KEY, AUTH_TOKEN_STORAGE_KEY, AUTH_USER_STORAGE_KEY, IS_MOCK } from '@/config/env'
 import { readStorage, removeStorage, writeStorage } from '@/lib/storage'
 import { decodeJwtPayload } from '@/lib/jwt'
@@ -39,6 +40,22 @@ const AuthContext = createContext<AuthContextValue | undefined>(undefined)
 // DELIVERY-role token-claim shape this decodes.
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(() => readStorage<User | null>(AUTH_USER_STORAGE_KEY, null))
+
+  // On open and whenever the app returns to the foreground, touch an authenticated endpoint: a user an
+  // admin blocked meanwhile gets ACCOUNT_BLOCKED and apiClient signs them out (see lib/sessionEnd).
+  const signedInUserId = user?.id ?? null
+  useEffect(() => {
+    if (IS_MOCK || signedInUserId == null) return
+    let last = 0
+    const check = () => {
+      if (document.visibilityState !== 'visible' || Date.now() - last < 30_000) return
+      last = Date.now()
+      apiClient.get('/users/me').catch(() => undefined)
+    }
+    check()
+    document.addEventListener('visibilitychange', check)
+    return () => document.removeEventListener('visibilitychange', check)
+  }, [signedInUserId])
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
