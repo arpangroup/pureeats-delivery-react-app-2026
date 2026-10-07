@@ -32,6 +32,8 @@ interface RiderSessionValue {
   lastPosition: Coordinates | null
   permissionState: GeolocationPermissionState
   locationError: string | null
+  /** Orders waiting for a delivery partner nearby (null until the first poll while online). */
+  availableCount: number | null
   /** Every order assigned to this rider and not yet finished, oldest first (null until first load). */
   activeDeliveries: ActiveDelivery[] | null
   refreshActiveDeliveries: () => Promise<void>
@@ -76,9 +78,15 @@ export function RiderSessionProvider({ children }: { children: ReactNode }) {
   const [statusNotice, setStatusNotice] = useState<string | null>(null)
   const [activeDeliveries, setActiveDeliveries] = useState<ActiveDelivery[] | null>(null)
   const [assignedAlert, setAssignedAlert] = useState<ActiveDelivery | null>(null)
+  const [availableCount, setAvailableCount] = useState<number | null>(null)
 
   const { locationTrackingEnabled, loaded: platformSettingsLoaded } = usePlatformSettings()
-  const { lastPosition, permissionState, error: locationError, reportNow } = useLocationReporting(active && isOnline, locationTrackingEnabled)
+  const hasActiveDelivery = (activeDeliveries?.length ?? 0) > 0
+  // Offline only stops NEW orders - location keeps flowing while a delivery is in progress so the customer can still track it.
+  const { lastPosition, permissionState, error: locationError, reportNow } = useLocationReporting(
+    active && (isOnline || hasActiveDelivery),
+    locationTrackingEnabled,
+  )
 
   const isOnlineRef = useRef(isOnline)
   isOnlineRef.current = isOnline
@@ -103,6 +111,7 @@ export function RiderSessionProvider({ children }: { children: ReactNode }) {
     setStatusNotice(null)
     try {
       await deliveryStatusService.setOnline(user.id, next)
+      deliveryOrderService.mockRecordStatus(next)
     } catch (err) {
       setIsOnline(!next) // revert the optimistic flip on failure
       const message = (err as { message?: string })?.message ?? 'Could not update your status.'
@@ -165,11 +174,18 @@ export function RiderSessionProvider({ children }: { children: ReactNode }) {
     return () => stopRinging()
   }, [assignedAlert])
 
-  const hasActiveDelivery = (activeDeliveries?.length ?? 0) > 0
+  const hasActiveDeliveryRef = useRef(hasActiveDelivery)
+  hasActiveDeliveryRef.current = hasActiveDelivery
 
   const pollAvailable = useCallback(async () => {
     try {
       const orders = await deliveryOrderService.listAvailable()
+      setAvailableCount(orders.length)
+      // Busy with a delivery: keep the count fresh for Home, but don't pop new-order alerts mid-delivery.
+      if (hasActiveDeliveryRef.current) {
+        previousAvailableIds.current = null
+        return
+      }
       const previous = previousAvailableIds.current
       // First poll after (re)starting establishes the baseline silently - only orders that appear
       // on a LATER poll count as "new". IncomingOrderContext additionally de-dupes against push.
@@ -200,18 +216,19 @@ export function RiderSessionProvider({ children }: { children: ReactNode }) {
     }
   }, [active, user?.id, syncServerStatus, refreshActiveDeliveries])
 
-  // New-order polling - always on while online and free, even when push is configured: a push that
+  // New-order polling - always on while online, even when push is configured: a push that
   // lands while the app is backgrounded goes to the service worker, never to the page, so polling
   // is what actually surfaces those orders once the rider is back.
   useEffect(() => {
-    if (!active || !isOnline || hasActiveDelivery) {
+    if (!active || !isOnline) {
       previousAvailableIds.current = null
+      setAvailableCount(null)
       return
     }
     pollAvailable()
     const id = setInterval(pollAvailable, AVAILABLE_POLL_MS)
     return () => clearInterval(id)
-  }, [active, isOnline, hasActiveDelivery, pollAvailable])
+  }, [active, isOnline, pollAvailable])
 
   useOnResume(() => {
     if (!active) return
@@ -236,13 +253,14 @@ export function RiderSessionProvider({ children }: { children: ReactNode }) {
       lastPosition,
       permissionState,
       locationError,
+      availableCount,
       activeDeliveries,
       refreshActiveDeliveries,
       markSelfAccepted,
       assignedAlert,
       acknowledgeAssignedAlert,
     }),
-    [isOnline, isSaving, error, toggle, statusNotice, locationTrackingEnabled, platformSettingsLoaded, lastPosition, permissionState, locationError, activeDeliveries, refreshActiveDeliveries, markSelfAccepted, assignedAlert, acknowledgeAssignedAlert],
+    [isOnline, isSaving, error, toggle, statusNotice, locationTrackingEnabled, platformSettingsLoaded, lastPosition, permissionState, locationError, availableCount, activeDeliveries, refreshActiveDeliveries, markSelfAccepted, assignedAlert, acknowledgeAssignedAlert],
   )
 
   return <RiderSessionContext.Provider value={value}>{children}</RiderSessionContext.Provider>

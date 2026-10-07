@@ -16,6 +16,8 @@ import RiderProfilePage from '@/pages/RiderProfilePage'
 import EditRiderProfilePage from '@/pages/EditRiderProfilePage'
 import WalletPage from '@/pages/WalletPage'
 import EarningsPage from '@/pages/EarningsPage'
+import PickupPhotosPage from '@/pages/PickupPhotosPage'
+import ActivityPage from '@/pages/ActivityPage'
 
 export function AppRoutes() {
   return (
@@ -40,6 +42,8 @@ export function AppRoutes() {
         <Route path="/" element={<HomePage />} />
         <Route path="/orders/available" element={<AvailableOrdersPage />} />
         <Route path="/deliveries/active" element={<ActiveDeliveryPage />} />
+        <Route path="/deliveries/:orderId/pickup-photos" element={<PickupPhotosPage />} />
+        <Route path="/profile/activity" element={<ActivityPage />} />
         <Route path="/deliveries/history" element={<DeliveryHistoryPage />} />
         <Route path="/profile" element={<RiderProfilePage />} />
         <Route path="/profile/edit" element={<EditRiderProfilePage />} />

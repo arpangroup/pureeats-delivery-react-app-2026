@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { ChevronRight, LogOut, ShieldOff, Wallet, Star, Bike } from 'lucide-react'
+import { ChevronRight, LogOut, ShieldOff, Wallet, Star, Bike, History, Mail, Phone } from 'lucide-react'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { useAuth } from '@/hooks/useAuth'
 import { riderProfileService } from '@/services/riderProfileService'
@@ -12,6 +12,7 @@ import { showErrorToast } from '@/lib/errorToast'
 const menuItems = [
   { to: '/profile/edit', label: 'Edit profile', icon: Bike },
   { to: '/profile/wallet', label: 'Wallet', icon: Wallet },
+  { to: '/profile/activity', label: 'Activity & login history', icon: History },
 ]
 
 export default function RiderProfilePage() {
@@ -55,7 +56,6 @@ export default function RiderProfilePage() {
           </span>
           <div className="min-w-0 flex-1">
             <p className="truncate text-base font-semibold text-slate-800 dark:text-slate-100">{user?.name}</p>
-            <p className="truncate text-sm text-slate-500 dark:text-slate-400">{user?.email}</p>
             {profile?.vehicleNumber && <p className="truncate text-xs text-slate-400 dark:text-slate-500">{profile.vehicleNumber}</p>}
           </div>
           {profile && (
@@ -63,6 +63,23 @@ export default function RiderProfilePage() {
               <Star size={12} /> {profile.rating.toFixed(1)}
             </span>
           )}
+        </div>
+
+        <div className="card mt-4 divide-y divide-slate-100 overflow-hidden dark:divide-slate-800">
+          <div className="flex items-center gap-3 px-4 py-3">
+            <Phone size={16} className="shrink-0 text-slate-400" />
+            <div className="min-w-0">
+              <p className="text-[11px] text-slate-400">Mobile number</p>
+              <p className="truncate text-sm font-medium text-slate-700 dark:text-slate-200">{profile?.phone || user?.phone || '-'}</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-3 px-4 py-3">
+            <Mail size={16} className="shrink-0 text-slate-400" />
+            <div className="min-w-0">
+              <p className="text-[11px] text-slate-400">Email</p>
+              <p className="truncate text-sm font-medium text-slate-700 dark:text-slate-200">{profile?.email || user?.email || '-'}</p>
+            </div>
+          </div>
         </div>
 
         <div className="card mt-4 divide-y divide-slate-100 overflow-hidden dark:divide-slate-800">

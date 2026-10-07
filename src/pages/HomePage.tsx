@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Power, ListChecks, Bike, Wallet as WalletIcon, Star, Wrench, AlertTriangle, X } from 'lucide-react'
+import { Power, ListChecks, Bike, Wallet as WalletIcon, Star, Wrench, AlertTriangle, X, History } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
 import { useRiderSession } from '@/context/RiderSessionContext'
 import { riderProfileService } from '@/services/riderProfileService'
@@ -27,6 +27,7 @@ export default function HomePage() {
     permissionState,
     locationError,
     activeDeliveries,
+    availableCount,
   } = useRiderSession()
   const activeDelivery = activeDeliveries?.[0] ?? null
   const [profile, setProfile] = useState<RiderProfile | null>(null)
@@ -86,24 +87,38 @@ export default function HomePage() {
         ) : (
           <button
             onClick={toggle}
-            disabled={isSaving || !!activeDelivery}
+            disabled={isSaving}
+            aria-label={isOnline ? 'Go offline' : 'Go online'}
             className={`flex w-full items-center justify-between rounded-2xl p-4 text-left shadow-card transition-colors ${
-              isOnline ? 'bg-brand-600 text-white' : 'bg-white text-slate-800 dark:bg-slate-900 dark:text-slate-100'
+              isOnline
+                ? 'bg-brand-600 text-white'
+                : 'border border-rose-200 bg-rose-50 text-slate-800 dark:border-rose-500/30 dark:bg-rose-500/10 dark:text-slate-100'
             } disabled:cursor-not-allowed disabled:opacity-80`}
           >
             <div className="min-w-0">
-              <p className="text-base font-bold">{isOnline ? "You're online" : "You're offline"}</p>
-              <p className={`mt-0.5 truncate text-xs ${isOnline ? 'text-white/80' : 'text-slate-500 dark:text-slate-400'}`}>
-                {activeDelivery
-                  ? 'Finish your current delivery to go offline'
+              <p className="flex items-center gap-2 text-base font-bold">
+                <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${isOnline ? 'bg-emerald-300 shadow-[0_0_0_3px_rgba(110,231,183,0.35)]' : 'bg-rose-500 shadow-[0_0_0_3px_rgba(244,63,94,0.2)]'}`} />
+                {isOnline ? "You're online" : "You're offline"}
+              </p>
+              <p className={`mt-0.5 truncate text-xs ${isOnline ? 'text-white/80' : 'text-rose-700 dark:text-rose-300'}`}>
+                {isSaving
+                  ? 'Updating...'
                   : isOnline
-                    ? lastPosition
-                      ? `Sending your location - ${lastPosition.latitude.toFixed(4)}, ${lastPosition.longitude.toFixed(4)}`
-                      : 'Sending your location...'
-                    : 'Go online to start receiving orders'}
+                    ? activeDelivery
+                      ? 'Tap to go offline and stop new orders - you can still finish this delivery'
+                      : lastPosition
+                        ? `Sending your location - ${lastPosition.latitude.toFixed(4)}, ${lastPosition.longitude.toFixed(4)}`
+                        : 'Sending your location...'
+                    : activeDelivery
+                      ? 'Not receiving new orders - finish your current delivery'
+                      : 'Not receiving orders - tap to go online'}
               </p>
             </div>
-            <span className={`ml-3 flex h-11 w-11 shrink-0 items-center justify-center rounded-full ${isOnline ? 'bg-white/20' : 'bg-brand-100 text-brand-600 dark:bg-brand-500/15'}`}>
+            <span
+              className={`ml-3 flex h-11 w-11 shrink-0 items-center justify-center rounded-full ${
+                isOnline ? 'bg-white/20' : 'bg-rose-500 text-white'
+              }`}
+            >
               <Power size={20} />
             </span>
           </button>
@@ -134,16 +149,30 @@ export default function HomePage() {
 
       <div className="mx-4 grid grid-cols-2 gap-3">
         <Link to="/orders/available" className="card flex flex-col items-start gap-2 p-4">
-          <span className="flex h-9 w-9 items-center justify-center rounded-full bg-brand-100 text-brand-600 dark:bg-brand-500/15">
-            <ListChecks size={18} />
-          </span>
-          <span className="text-sm font-semibold text-slate-800 dark:text-slate-100">Browse orders</span>
+          <div className="flex w-full items-center justify-between">
+            <span className="flex h-9 w-9 items-center justify-center rounded-full bg-brand-100 text-brand-600 dark:bg-brand-500/15">
+              <ListChecks size={18} />
+            </span>
+            <span className="text-2xl font-bold tabular-nums text-slate-800 dark:text-slate-100" aria-label="Pending orders">
+              {availableCount ? availableCount : '-'}
+            </span>
+          </div>
+          <span className="text-sm font-semibold text-slate-800 dark:text-slate-100">Pending orders</span>
         </Link>
         <Link to="/deliveries/history" className="card flex flex-col items-start gap-2 p-4">
           <span className="flex h-9 w-9 items-center justify-center rounded-full bg-brand-100 text-brand-600 dark:bg-brand-500/15">
             <Bike size={18} />
           </span>
           <span className="text-sm font-semibold text-slate-800 dark:text-slate-100">Delivery history</span>
+        </Link>
+        <Link to="/profile/activity" className="card col-span-2 flex items-center gap-3 p-4">
+          <span className="flex h-9 w-9 items-center justify-center rounded-full bg-brand-100 text-brand-600 dark:bg-brand-500/15">
+            <History size={18} />
+          </span>
+          <div className="min-w-0">
+            <span className="block text-sm font-semibold text-slate-800 dark:text-slate-100">Online / offline history</span>
+            <span className="block text-xs text-slate-500 dark:text-slate-400">Including when the app set you offline automatically, and your logins</span>
+          </div>
         </Link>
       </div>
 

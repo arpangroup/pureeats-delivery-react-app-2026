@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ChangeEvent, type FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Camera, Check, Loader2 } from 'lucide-react'
+import { Camera, Check, Loader2, Lock } from 'lucide-react'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Field, TextInput, Textarea } from '@/components/ui/FormControls'
 import { useAuth } from '@/hooks/useAuth'
@@ -10,6 +10,7 @@ import { initials } from '@/lib/format'
 import { IS_MOCK } from '@/config/env'
 import type { Gender, RiderProfile } from '@/types/entities'
 import { showErrorToast } from '@/lib/errorToast'
+import { useDriverSettings } from '@/hooks/useDriverSettings'
 
 type ContactField = 'phone' | 'email'
 
@@ -20,11 +21,14 @@ function ContactChangeCard({
   userId,
   currentValue,
   onChanged,
+  editable,
 }: {
   field: ContactField
   userId: number
   currentValue: string
   onChanged: (value: string) => void
+  /** Settings -> Delivery Application -> Profile editing; view-only by default. */
+  editable: boolean
 }) {
   const [editing, setEditing] = useState(false)
   const [step, setStep] = useState<'input' | 'otp'>('input')
@@ -87,9 +91,15 @@ function ContactChangeCard({
           <p className="text-xs font-medium text-slate-500 dark:text-slate-400">{label}</p>
           <p className="truncate text-sm font-medium text-slate-800 dark:text-slate-100">{currentValue || '-'}</p>
         </div>
-        <button type="button" className="shrink-0 text-xs font-semibold text-brand-600" onClick={() => setEditing(true)}>
-          Change
-        </button>
+        {editable ? (
+          <button type="button" className="shrink-0 text-xs font-semibold text-brand-600" onClick={() => setEditing(true)}>
+            Change
+          </button>
+        ) : (
+          <span className="flex shrink-0 items-center gap-1 text-[11px] text-slate-400" title="Contact support to change it">
+            <Lock size={12} /> View only
+          </span>
+        )}
       </div>
     )
   }
@@ -165,6 +175,8 @@ export default function EditRiderProfilePage() {
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const { profileEditable: can } = useDriverSettings()
+  const anyEditable = can.name || can.vehicleNumber || can.age || can.gender || can.about
 
   useEffect(() => {
     if (!user) return
@@ -180,8 +192,9 @@ export default function EditRiderProfilePage() {
       setGender(p?.gender ?? '')
       setDescription(p?.description ?? '')
       setPhoto(p?.photo ?? null)
-      setPhone(user.phone)
-      setEmail(user.email)
+      // The token's copy can be empty for older sign-ins - prefer the profile's.
+      setPhone(p?.phone || user.phone || '')
+      setEmail(p?.email || user.email || '')
     })
       .catch((err) => {
         if (!cancelled) showErrorToast(err, 'Could not load your profile.')
@@ -251,18 +264,30 @@ export default function EditRiderProfilePage() {
         </div>
 
         <form onSubmit={handleSave} className="card mt-2 space-y-4 p-4">
+          {!anyEditable && (
+            <p className="flex items-start gap-2 rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-500 dark:bg-slate-800/60 dark:text-slate-400">
+              <Lock size={14} className="mt-0.5 shrink-0" /> These details are managed by PureEats. Contact support to change them - you can still update your photo.
+            </p>
+          )}
           <Field label="Name" required>
-            <TextInput value={name} onChange={(e) => setName(e.target.value)} required />
+            <TextInput value={name} onChange={(e) => setName(e.target.value)} required readOnly={!can.name} disabled={!can.name} />
           </Field>
           <Field label="Vehicle number" required>
-            <TextInput value={vehicleNumber} onChange={(e) => setVehicleNumber(e.target.value)} placeholder="KA-05-HH-1234" required />
+            <TextInput
+              value={vehicleNumber}
+              onChange={(e) => setVehicleNumber(e.target.value)}
+              placeholder="KA-05-HH-1234"
+              required
+              readOnly={!can.vehicleNumber}
+              disabled={!can.vehicleNumber}
+            />
           </Field>
           <div className="grid grid-cols-2 gap-3">
             <Field label="Age">
-              <TextInput type="number" min={18} max={70} value={age} onChange={(e) => setAge(e.target.value)} />
+              <TextInput type="number" min={18} max={70} value={age} onChange={(e) => setAge(e.target.value)} readOnly={!can.age} disabled={!can.age} />
             </Field>
             <Field label="Gender">
-              <select className="input" value={gender} onChange={(e) => setGender(e.target.value as Gender | '')}>
+              <select className="input disabled:opacity-60" value={gender} onChange={(e) => setGender(e.target.value as Gender | '')} disabled={!can.gender}>
                 <option value="">Prefer not to say</option>
                 <option value="MALE">Male</option>
                 <option value="FEMALE">Female</option>
@@ -271,12 +296,16 @@ export default function EditRiderProfilePage() {
             </Field>
           </div>
           <Field label="About you">
-            <Textarea value={description} onChange={(e) => setDescription(e.target.value)} />
+            <Textarea value={description} onChange={(e) => setDescription(e.target.value)} readOnly={!can.about} disabled={!can.about} />
           </Field>
 
           {error && <p className="rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-600 dark:bg-rose-500/10 dark:text-rose-400">{error}</p>}
 
-          <button type="submit" className="btn-primary flex w-full items-center justify-center gap-2" disabled={saving || !name.trim() || !vehicleNumber.trim()}>
+          <button
+            type="submit"
+            className="btn-primary flex w-full items-center justify-center gap-2"
+            disabled={saving || !name.trim() || !vehicleNumber.trim() || (!anyEditable && !photoFile)}
+          >
             {saving ? (
               'Saving...'
             ) : saved ? (
@@ -296,15 +325,15 @@ export default function EditRiderProfilePage() {
               <p className="text-[11px] text-slate-400">Rating</p>
             </div>
             <div className="p-3 text-center">
-              <p className="text-sm font-bold text-slate-800 dark:text-slate-100">{profile.commissionRate}%</p>
+              <p className="text-sm font-bold text-slate-800 dark:text-slate-100">{profile.commissionRate > 0 ? `${profile.commissionRate}%` : 'Standard'}</p>
               <p className="text-[11px] text-slate-400">Commission</p>
             </div>
           </div>
         )}
 
         <div className="card mt-4 divide-y divide-slate-100 px-4 dark:divide-slate-800">
-          <ContactChangeCard field="phone" userId={user.id} currentValue={phone} onChanged={setPhone} />
-          <ContactChangeCard field="email" userId={user.id} currentValue={email} onChanged={setEmail} />
+          <ContactChangeCard field="phone" userId={user.id} currentValue={phone} onChanged={setPhone} editable={can.phone} />
+          <ContactChangeCard field="email" userId={user.id} currentValue={email} onChanged={setEmail} editable={can.email} />
         </div>
       </div>
     </div>

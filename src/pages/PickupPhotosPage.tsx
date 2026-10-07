@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState, type ComponentRef } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { Camera, CameraOff, Loader2, X } from 'lucide-react'
 import { PageHeader } from '@/components/layout/PageHeader'
@@ -25,8 +25,8 @@ export default function PickupPhotosPage() {
   const { activeDeliveries, refreshActiveDeliveries } = useRiderSession()
   const delivery = activeDeliveries?.find((d) => d.id === id)
 
-  const videoRef = useRef<HTMLVideoElement>(null)
-  const streamRef = useRef<MediaStream | null>(null)
+  const videoRef = useRef<ComponentRef<'video'>>(null)
+  const streamRef = useRef<Awaited<ReturnType<typeof navigator.mediaDevices.getUserMedia>> | null>(null)
   const [cameraState, setCameraState] = useState<'starting' | 'ready' | 'unavailable'>('starting')
   const [cameraError, setCameraError] = useState<string | null>(null)
   const [photos, setPhotos] = useState<PickupPhoto[] | null>(null)
