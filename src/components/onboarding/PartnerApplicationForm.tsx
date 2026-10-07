@@ -7,6 +7,10 @@ import { showErrorToast } from '@/lib/errorToast'
 import { compressImage } from '@/lib/imageCompress'
 import type { IdProofType, PartnerApplication, PayoutMethod, RiderProfile, VehicleType } from '@/types/entities'
 
+/** Same rules the server applies (RiderKyc). */
+const IFSC_RE = /^[A-Z]{4}0[A-Z0-9]{6}$/
+const ACCOUNT_RE = /^\d{9,18}$/
+
 const VEHICLES: { value: VehicleType; label: string; icon: typeof Bike }[] = [
   { value: 'BIKE', label: 'Bike', icon: Bike },
   { value: 'CYCLE', label: 'Cycle', icon: Bike },
@@ -164,10 +168,15 @@ export function PartnerApplicationForm({
     !licensePhoto && !existing?.licensePhotoUrl && 'licence photo',
     form.idProofNumber.trim().length < 10 && (form.idProofType === 'AADHAAR' ? 'Aadhaar number' : 'PAN'),
     form.vehicleType !== 'CYCLE' && form.vehicleNumber.trim().length < 4 && 'vehicle number',
-    form.payoutMethod === 'UPI'
-      ? !form.upiId.includes('@') && 'UPI ID'
-      : (!form.bankAccountHolder.trim() || form.bankAccountNumber.trim().length < 9 || form.bankIfsc.trim().length !== 11) && 'bank account details',
+    ...(form.payoutMethod === 'UPI'
+      ? [!form.upiId.includes('@') && 'UPI ID']
+      : [
+          !form.bankAccountHolder.trim() && 'account holder name',
+          !ACCOUNT_RE.test(form.bankAccountNumber.trim()) && 'account number (9-18 digits)',
+          !IFSC_RE.test(form.bankIfsc.trim()) && 'IFSC (11 characters, e.g. SBIN0001234)',
+        ]),
   ].filter(Boolean) as string[]
+  const ifscInvalid = form.payoutMethod === 'BANK' && form.bankIfsc.trim().length > 0 && !IFSC_RE.test(form.bankIfsc.trim())
 
   async function submit(e: FormEvent) {
     e.preventDefault()
@@ -281,8 +290,13 @@ export function PartnerApplicationForm({
             <Field label="Account number" required hint={existing?.bankAccountNumberMasked ? `On file: ${existing.bankAccountNumberMasked}` : undefined}>
               <TextInput inputMode="numeric" value={form.bankAccountNumber} onChange={(e) => set('bankAccountNumber', e.target.value.replace(/\D/g, ''))} required />
             </Field>
-            <Field label="IFSC" required>
-              <TextInput value={form.bankIfsc} onChange={(e) => set('bankIfsc', e.target.value.toUpperCase().slice(0, 11))} placeholder="HDFC0001234" required />
+            <Field
+              label="IFSC"
+              required
+              hint="11 characters: 4 letters, a zero, then 6 letters/digits - printed on your passbook or cheque (e.g. SBIN0001234)."
+              error={ifscInvalid ? `IFSC must be 11 characters like SBIN0001234 (you entered ${form.bankIfsc.trim().length}).` : undefined}
+            >
+              <TextInput value={form.bankIfsc} onChange={(e) => set('bankIfsc', e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 11))} placeholder="SBIN0001234" required />
             </Field>
           </>
         )}
