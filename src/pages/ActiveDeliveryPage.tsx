@@ -136,6 +136,7 @@ export default function ActiveDeliveryPage() {
   const pickedUp = OUT_FOR_DELIVERY.includes(delivery.status)
   const isHeadingToRestaurant = !pickedUp
   const photoCount = delivery.pickupPhotoCount ?? 0
+  const deliveryPhotoCount = delivery.deliveryPhotoCount ?? 0
   const canPickUp = !!delivery.foodReady && photoCount > 0
   const totalItems = delivery.items.reduce((sum, item) => sum + item.quantity, 0)
   const isCod = paymentLabel(delivery.paymentMode) === 'COD'
@@ -279,7 +280,7 @@ export default function ActiveDeliveryPage() {
               </p>
             )}
             <Link
-              to={`/deliveries/${delivery.id}/pickup-photos`}
+              to={`/deliveries/${delivery.id}/photos/pickup`}
               className={`flex items-center justify-between rounded-xl border px-3 py-3 text-sm font-semibold ${
                 photoCount > 0
                   ? 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-400'
@@ -318,8 +319,24 @@ export default function ActiveDeliveryPage() {
           </div>
         )}
 
-        {pickedUp && (
+        {delivery.status === 'ARRIVED' && (
           <div className="card space-y-3 p-4">
+            <Link
+              to={`/deliveries/${delivery.id}/photos/delivery`}
+              className={`flex items-center justify-between rounded-xl border px-3 py-3 text-sm font-semibold ${
+                deliveryPhotoCount > 0
+                  ? 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-400'
+                  : 'border-brand-200 bg-brand-50 text-brand-700 dark:border-brand-500/30 dark:bg-brand-500/10 dark:text-brand-400'
+              }`}
+            >
+              <span className="flex items-center gap-2">
+                <Camera size={18} /> {deliveryPhotoCount > 0 ? 'Delivery photo' : 'Take delivery photo'}
+              </span>
+              <span className="text-xs">
+                {deliveryPhotoCount}/{MAX_PICKUP_PHOTOS}
+              </span>
+            </Link>
+            {deliveryPhotoCount === 0 && <p className="text-xs text-slate-500 dark:text-slate-400">Take a photo as you hand over the order before confirming delivery.</p>}
             <p className="text-sm font-medium text-slate-700 dark:text-slate-200">Ask the customer for their delivery PIN</p>
             <TextInput
               value={pin}
@@ -331,10 +348,10 @@ export default function ActiveDeliveryPage() {
             />
             <SwipeToAcceptButton
               key={`deliver-${delivery.id}`}
-              label={busy ? 'Confirming...' : pin.length !== 4 ? 'Enter the 4-digit PIN' : 'Slide to confirm delivery'}
+              label={busy ? 'Confirming...' : deliveryPhotoCount === 0 ? 'Take a photo first' : pin.length !== 4 ? 'Enter the 4-digit PIN' : 'Slide to confirm delivery'}
               doneLabel="Delivered!"
               onAccept={handleDeliver}
-              disabled={busy || pin.length !== 4}
+              disabled={busy || pin.length !== 4 || deliveryPhotoCount === 0}
             />
           </div>
         )}

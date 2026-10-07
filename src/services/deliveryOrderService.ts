@@ -5,7 +5,7 @@ import { availableOrderTemplates, type AvailableOrderTemplate } from '@/mocks/fi
 import { toNumber } from '@/lib/format'
 import { activeDeliveryDetailById, MOCK_DELIVERY_PIN } from '@/mocks/fixtures/activeDelivery'
 import { deliveryHistory } from '@/mocks/fixtures/history'
-import type { ActiveDelivery, AvailableOrder, DeliveryHistoryEntry, PickupPhoto, RiderActivity } from '@/types/entities'
+import type { ActiveDelivery, AvailableOrder, DeliveryHistoryEntry, OrderPhotoKind, PickupPhoto, RiderActivity } from '@/types/entities'
 
 // --- Mock in-memory order-pool simulation -----------------------------
 // Simulates the backend "new orders keep arriving" behavior without a server: a rolling window of
@@ -17,7 +17,7 @@ let currentActive: ActiveDelivery | null = null
 /** Mock: the kitchen "marks the food ready" this long after the rider accepts, so the gated pickup can be demoed. */
 const MOCK_READY_AFTER_MS = 15_000
 let mockAcceptedAtMs = 0
-let mockPhotos: PickupPhoto[] = []
+let mockPhotos: Record<OrderPhotoKind, PickupPhoto[]> = { pickup: [], delivery: [] }
 const mockStatusHistory: RiderActivity['statusHistory'] = []
 const sessionHistory: DeliveryHistoryEntry[] = []
 
@@ -83,8 +83,12 @@ function normalizeActiveDelivery(d: ActiveDelivery): ActiveDelivery {
     // Older backends don't send foodReady - fall back to the statuses they used to allow pickup from.
     foodReady: d.foodReady ?? ['READY_FOR_PICKUP', 'RIDER_ASSIGNED', 'PICKED_UP', 'ON_THE_WAY', 'ARRIVED'].includes(d.status),
     pickupPhotoCount: d.pickupPhotoCount ?? 0,
+    deliveryPhotoCount: d.deliveryPhotoCount ?? 0,
   }
 }
+
+/** Backend path segment for each photo kind. */
+const PHOTO_PATH: Record<OrderPhotoKind, string> = { pickup: 'pickup-photos', delivery: 'delivery-photos' }
 
 /** Mock: the active order with the simulated kitchen progress applied. */
 function mockActiveNow(): ActiveDelivery | null {
@@ -93,7 +97,7 @@ function mockActiveNow(): ActiveDelivery | null {
   if (ready && !currentActive.foodReady && currentActive.status === 'PREPARING') {
     currentActive = { ...currentActive, status: 'RIDER_ASSIGNED', foodReady: true }
   }
-  return { ...currentActive, pickupPhotoCount: mockPhotos.length }
+  return { ...currentActive, pickupPhotoCount: mockPhotos.pickup.length, deliveryPhotoCount: mockPhotos.delivery.length }
 }
 
 /** "COD" vs "Prepaid" - every non-cash mode (Razorpay, wallet...) is prepaid as far as the rider is concerned. */
@@ -124,7 +128,7 @@ export const deliveryOrderService = {
       const detail = activeDeliveryDetailById[orderId]
       const now = new Date().toISOString()
       mockAcceptedAtMs = Date.now()
-      mockPhotos = []
+      mockPhotos = { pickup: [], delivery: [] }
       const tpl = template as Partial<AvailableOrder>
       currentActive = {
         id: template.id,
@@ -170,7 +174,7 @@ export const deliveryOrderService = {
       const active = mockActiveNow()
       if (!active || active.id !== orderId) throw { message: 'No active delivery matches this order.' }
       if (!active.foodReady) throw { message: "The restaurant hasn't marked this order ready yet - you can mark it picked up once it's ready." }
-      if (mockPhotos.length === 0) throw { message: 'Take at least one photo of the packed order before marking it picked up.' }
+      if (mockPhotos.pickup.length === 0) throw { message: 'Take at least one photo of the packed order before marking it picked up.' }
       currentActive = { ...active, status: 'PICKED_UP', pickedUpAt: new Date().toISOString() }
       return currentActive
     }
@@ -191,35 +195,36 @@ export const deliveryOrderService = {
     await apiClient.post(`/delivery/orders/${orderId}/arrived`)
   },
 
-  async listPickupPhotos(orderId: number): Promise<PickupPhoto[]> {
+  async listPhotos(orderId: number, kind: OrderPhotoKind): Promise<PickupPhoto[]> {
     if (IS_MOCK) {
       await mockDelay(80)
-      return [...mockPhotos]
+      return [...mockPhotos[kind]]
     }
-    const { data } = await apiClient.get<{ data: PickupPhoto[] }>(`/delivery/orders/${orderId}/pickup-photos`)
+    const { data } = await apiClient.get<{ data: PickupPhoto[] }>(`/delivery/orders/${orderId}/${PHOTO_PATH[kind]}`)
     return data.data ?? []
   },
 
-  /** Uploads one camera shot of the packed order (max 3, before pickup). */
-  async uploadPickupPhoto(orderId: number, photo: Blob): Promise<void> {
+  /** Uploads one camera shot (max 3): the packed order before pickup, or the handover after arriving. */
+  async uploadPhoto(orderId: number, kind: OrderPhotoKind, photo: Blob): Promise<void> {
     if (IS_MOCK) {
       await mockDelay(300)
-      if (mockPhotos.length >= MAX_PICKUP_PHOTOS) throw { message: `You can add up to ${MAX_PICKUP_PHOTOS} photos - remove one to retake it.` }
-      mockPhotos = [...mockPhotos, { id: Date.now(), url: URL.createObjectURL(photo), takenAt: new Date().toISOString() }]
+      if (mockPhotos[kind].length >= MAX_PICKUP_PHOTOS) throw { message: `You can add up to ${MAX_PICKUP_PHOTOS} photos - remove one to retake it.` }
+      if (kind === 'delivery' && currentActive?.status !== 'ARRIVED') throw { message: "Mark that you've reached the customer before taking the delivery photo." }
+      mockPhotos = { ...mockPhotos, [kind]: [...mockPhotos[kind], { id: Date.now(), url: URL.createObjectURL(photo), takenAt: new Date().toISOString() }] }
       return
     }
     const form = new FormData()
-    form.append('file', photo, `pickup-${orderId}-${Date.now()}.jpg`)
-    await apiClient.post(`/delivery/orders/${orderId}/pickup-photos`, form)
+    form.append('file', photo, `${kind}-${orderId}-${Date.now()}.jpg`)
+    await apiClient.post(`/delivery/orders/${orderId}/${PHOTO_PATH[kind]}`, form)
   },
 
-  async deletePickupPhoto(orderId: number, photoId: number): Promise<void> {
+  async deletePhoto(orderId: number, kind: OrderPhotoKind, photoId: number): Promise<void> {
     if (IS_MOCK) {
       await mockDelay(120)
-      mockPhotos = mockPhotos.filter((p) => p.id !== photoId)
+      mockPhotos = { ...mockPhotos, [kind]: mockPhotos[kind].filter((p) => p.id !== photoId) }
       return
     }
-    await apiClient.delete(`/delivery/orders/${orderId}/pickup-photos/${photoId}`)
+    await apiClient.delete(`/delivery/orders/${orderId}/${PHOTO_PATH[kind]}/${photoId}`)
   },
 
   /** Online/offline history (incl. automatic offline) and recent sign-ins. */
@@ -254,6 +259,8 @@ export const deliveryOrderService = {
     if (IS_MOCK) {
       await mockDelay(300)
       if (!currentActive || currentActive.id !== orderId) throw { message: 'No active delivery matches this order.' }
+      if (currentActive.status !== 'ARRIVED') throw { message: "Mark that you've reached the customer's location first." }
+      if (mockPhotos.delivery.length === 0) throw { message: 'Take a photo of the order being handed over before confirming delivery.' }
       if (deliveryPin !== MOCK_DELIVERY_PIN) throw { message: `Incorrect PIN. Ask the customer to read out their delivery PIN (mock mode: ${MOCK_DELIVERY_PIN}).` }
       const delivered: ActiveDelivery = { ...currentActive, status: 'DELIVERED', deliveredAt: new Date().toISOString() }
       sessionHistory.unshift({
