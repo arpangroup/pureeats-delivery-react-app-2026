@@ -15,7 +15,7 @@ export interface PlatformSettings {
   profileEditable: Record<ProfileField, boolean>
 }
 
-export type ProfileField = 'name' | 'vehicleNumber' | 'age' | 'gender' | 'about' | 'phone' | 'email'
+export type ProfileField = 'name' | 'vehicleNumber' | 'age' | 'gender' | 'about' | 'phone' | 'email' | 'license' | 'idProof' | 'vehicleType' | 'payout'
 
 const PROFILE_KEYS: Record<ProfileField, string> = {
   name: 'driver_edit_name',
@@ -25,9 +25,25 @@ const PROFILE_KEYS: Record<ProfileField, string> = {
   about: 'driver_edit_about',
   phone: 'driver_edit_phone',
   email: 'driver_edit_email',
+  license: 'driver_edit_license',
+  idProof: 'driver_edit_id_proof',
+  vehicleType: 'driver_edit_vehicle_type',
+  payout: 'driver_edit_payout',
 }
 
-const LOCKED: Record<ProfileField, boolean> = { name: false, vehicleNumber: false, age: false, gender: false, about: false, phone: false, email: false }
+const LOCKED: Record<ProfileField, boolean> = {
+  name: false,
+  vehicleNumber: false,
+  age: false,
+  gender: false,
+  about: false,
+  phone: false,
+  email: false,
+  license: false,
+  idProof: false,
+  vehicleType: false,
+  payout: false,
+}
 
 const DEFAULTS: PlatformSettings = { locationTrackingEnabled: true, orderAlertSoundUrl: null, showPayout: false, profileEditable: LOCKED }
 

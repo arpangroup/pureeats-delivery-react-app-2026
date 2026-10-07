@@ -4,6 +4,7 @@ import { Field, TextInput } from '@/components/ui/FormControls'
 import { userService } from '@/services/userService'
 import { classNames } from '@/lib/format'
 import { showErrorToast } from '@/lib/errorToast'
+import { compressImage } from '@/lib/imageCompress'
 import type { IdProofType, PartnerApplication, PayoutMethod, RiderProfile, VehicleType } from '@/types/entities'
 
 const VEHICLES: { value: VehicleType; label: string; icon: typeof Bike }[] = [
@@ -140,24 +141,40 @@ export function PartnerApplicationForm({
 
   const set = <K extends keyof PartnerApplication>(key: K, value: PartnerApplication[K]) => setForm((f) => ({ ...f, [key]: value }))
 
-  function pickLicense(e: ChangeEvent<HTMLInputElement>) {
+  async function pickLicense(e: ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
+    e.target.value = ''
     if (!file) return
-    setLicensePhoto(file)
-    setLicensePreview(URL.createObjectURL(file))
+    setError(null)
+    try {
+      // Camera photos are 5-15MB (or HEIC); shrink to a JPEG the server accepts before it's ever uploaded.
+      const small = await compressImage(file)
+      setLicensePhoto(small)
+      setLicensePreview(URL.createObjectURL(small))
+    } catch (err) {
+      setError((err as { message?: string })?.message ?? "Couldn't use this photo.")
+    }
   }
 
-  const ready =
-    !!verifiedPhone &&
-    form.name.trim().length > 1 &&
-    form.licenseNumber.trim().length >= 8 &&
-    (!!licensePhoto || !!existing?.licensePhotoUrl) &&
-    form.idProofNumber.trim().length >= 10 &&
-    (form.vehicleType === 'CYCLE' || form.vehicleNumber.trim().length >= 4) &&
-    (form.payoutMethod === 'UPI' ? form.upiId.includes('@') : form.bankAccountHolder.trim() && form.bankAccountNumber.trim().length >= 9 && form.bankIfsc.trim().length === 11)
+  // What's still missing - listed when Submit is tapped, instead of a button that silently does nothing.
+  const missing = [
+    !verifiedPhone && 'verify your mobile number',
+    form.name.trim().length <= 1 && 'full name',
+    form.licenseNumber.trim().length < 8 && 'driving licence number',
+    !licensePhoto && !existing?.licensePhotoUrl && 'licence photo',
+    form.idProofNumber.trim().length < 10 && (form.idProofType === 'AADHAAR' ? 'Aadhaar number' : 'PAN'),
+    form.vehicleType !== 'CYCLE' && form.vehicleNumber.trim().length < 4 && 'vehicle number',
+    form.payoutMethod === 'UPI'
+      ? !form.upiId.includes('@') && 'UPI ID'
+      : (!form.bankAccountHolder.trim() || form.bankAccountNumber.trim().length < 9 || form.bankIfsc.trim().length !== 11) && 'bank account details',
+  ].filter(Boolean) as string[]
 
   async function submit(e: FormEvent) {
     e.preventDefault()
+    if (missing.length > 0) {
+      setError(`Please complete: ${missing.join(', ')}.`)
+      return
+    }
     setSubmitting(true)
     setError(null)
     try {
@@ -273,7 +290,7 @@ export function PartnerApplicationForm({
 
       {error && <p className="rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-600 dark:bg-rose-500/10 dark:text-rose-400">{error}</p>}
 
-      <button type="submit" className="btn-primary flex w-full items-center justify-center gap-2" disabled={submitting || !ready}>
+      <button type="submit" className="btn-primary flex w-full items-center justify-center gap-2" disabled={submitting}>
         {submitting ? <Loader2 size={16} className="animate-spin" /> : <BadgeCheck size={16} />}
         {submitting ? 'Submitting...' : submitLabel}
       </button>
