@@ -16,6 +16,54 @@ type Tab = 'transactions' | 'pending' | 'settlements'
  * (all of it goes to the platform) and their earnings not yet paid out (all of it comes to them). Every
  * transaction, pending trip and settlement opens its own breakdown.
  */
+function WithdrawSheet({ available, payoutTo, onClose, onDone }: { available: number; payoutTo: string | null | undefined; onClose: () => void; onDone: () => void }) {
+  const [amount, setAmount] = useState(String(available))
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const value = Number(amount)
+
+  async function submit() {
+    setBusy(true)
+    setError(null)
+    try {
+      await earningsService.requestWithdrawal(value)
+      onDone()
+    } catch (err) {
+      setError((err as { message?: string })?.message ?? 'Could not request the withdrawal.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-900/60 px-4 pb-safe" onClick={onClose}>
+      <div className="mb-4 w-full max-w-md rounded-2xl bg-white p-5 dark:bg-slate-900" onClick={(e) => e.stopPropagation()}>
+        <h3 className="text-base font-bold text-slate-800 dark:text-slate-100">Withdraw from wallet</h3>
+        <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">Available {formatCurrency(available)}</p>
+        <div className="mt-4 flex items-center gap-2 rounded-xl border border-slate-200 px-3 dark:border-slate-700">
+          <span className="text-lg font-semibold text-slate-500">₹</span>
+          <input
+            className="w-full bg-transparent py-3 text-lg font-bold text-slate-800 outline-none dark:text-slate-100"
+            inputMode="decimal"
+            value={amount}
+            onChange={(e) => setAmount(e.target.value.replace(/[^\d.]/g, ''))}
+          />
+          <button type="button" className="text-xs font-semibold text-brand-600" onClick={() => setAmount(String(available))}>
+            Max
+          </button>
+        </div>
+        <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
+          {payoutTo ? `Paid to ${payoutTo}.` : 'Add your bank account or UPI ID to your profile first.'} The admin transfers it and marks it paid.
+        </p>
+        {error && <p className="mt-2 text-sm text-rose-600">{error}</p>}
+        <button className="btn-primary mt-4 w-full" onClick={submit} disabled={busy || !payoutTo || !(value > 0) || value > available}>
+          {busy ? 'Requesting...' : `Request ${value > 0 ? formatCurrency(value) : ''}`}
+        </button>
+      </div>
+    </div>
+  )
+}
+
 export default function WalletPage() {
   const [summary, setSummary] = useState<RiderEarningsSummary | null>(null)
   const [transactions, setTransactions] = useState<RiderWalletTransaction[] | null>(null)
@@ -24,6 +72,7 @@ export default function WalletPage() {
   const [tab, setTab] = useState<Tab>('transactions')
   const [openOrderId, setOpenOrderId] = useState<number | null>(null)
   const [openSettlementId, setOpenSettlementId] = useState<number | null>(null)
+  const [withdrawOpen, setWithdrawOpen] = useState(false)
 
   useEffect(() => {
     let cancelled = false
@@ -105,12 +154,23 @@ export default function WalletPage() {
               <span className="flex h-11 w-11 items-center justify-center rounded-full bg-white/15">
                 <WalletIcon size={20} />
               </span>
-              <div>
-                <p className="text-xs text-white/75">Earnings to be paid to you</p>
-                <p className="text-2xl font-bold">{summary ? formatCurrency(summary.pendingEarnings) : '...'}</p>
+              <div className="min-w-0 flex-1">
+                <p className="text-xs text-white/75">Wallet balance (your earnings)</p>
+                <p className="text-2xl font-bold">{summary ? formatCurrency(summary.walletBalance ?? summary.pendingEarnings) : '...'}</p>
               </div>
+              <button
+                className="shrink-0 rounded-full bg-white px-4 py-2 text-sm font-semibold text-brand-700 disabled:opacity-50"
+                onClick={() => setWithdrawOpen(true)}
+                disabled={!summary || (summary.availableToWithdraw ?? 0) <= 0}
+              >
+                Withdraw
+              </button>
             </div>
-            <p className="mt-2 text-xs text-white/75">{summary ? `${summary.unsettledTrips} trip(s), commission + tips. Paid in full - not deducted from the cash.` : ''}</p>
+            <p className="mt-2 text-xs text-white/75">
+              {summary && (summary.pendingWithdrawals ?? 0) > 0
+                ? `${formatCurrency(summary.pendingWithdrawals ?? 0)} withdrawal requested - waiting to be paid. Available: ${formatCurrency(summary.availableToWithdraw ?? 0)}.`
+                : 'Commission + tips from your deliveries. Withdraw any time, or the platform pays it out to your bank/UPI.'}
+            </p>
           </div>
         </div>
         {summary && (summary.openOrders ?? 0) > 0 && (
@@ -262,6 +322,18 @@ export default function WalletPage() {
           onOpenSettlement={(id) => {
             setOpenOrderId(null)
             setOpenSettlementId(id)
+          }}
+        />
+      )}
+      {withdrawOpen && summary && (
+        <WithdrawSheet
+          available={summary.availableToWithdraw ?? 0}
+          payoutTo={summary.payoutTo}
+          onClose={() => setWithdrawOpen(false)}
+          onDone={() => {
+            setWithdrawOpen(false)
+            setSettlements(null)
+            earningsService.summary().then(setSummary).catch(() => undefined)
           }}
         />
       )}

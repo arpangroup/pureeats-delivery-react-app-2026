@@ -157,7 +157,9 @@ function isLegacyNetted(s: Pick<RiderSettlement, 'direction' | 'earningsAmount' 
   return s.direction !== 'BOTH' && s.earningsAmount > 0 && s.codAmount > 0
 }
 
-export function directionText(s: Pick<RiderSettlement, 'direction' | 'netAmount' | 'earningsAmount' | 'codAmount'>): string {
+export function directionText(s: Pick<RiderSettlement, 'direction' | 'netAmount' | 'earningsAmount' | 'codAmount' | 'status'>): string {
+  if (s.status === 'REQUESTED') return `Withdrawal of ${formatCurrency(s.earningsAmount)} requested`
+  if (s.status === 'REJECTED') return `Withdrawal of ${formatCurrency(s.earningsAmount)} rejected`
   if (isLegacyNetted(s)) {
     if (s.direction === 'PAID_TO_RIDER') return `Paid to you: ${formatCurrency(Math.abs(s.netAmount))}`
     if (s.direction === 'COLLECTED_FROM_RIDER') return `You paid in: ${formatCurrency(Math.abs(s.netAmount))}`

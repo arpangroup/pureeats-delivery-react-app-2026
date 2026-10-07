@@ -247,6 +247,10 @@ export interface RiderSettlement {
   transactionReference: string | null
   note: string | null
   createdAt: string
+  /** REQUESTED = a withdrawal waiting for the admin; PAID; REJECTED. */
+  status?: 'REQUESTED' | 'PAID' | 'REJECTED'
+  requestedAt?: string | null
+  paidAt?: string | null
 }
 
 /** Where the rider stands - GET /delivery/earnings/summary. netPending = pendingEarnings - cashInHand. */
@@ -265,6 +269,14 @@ export interface RiderEarningsSummary {
   openOrderValue?: number
   /** COD orders whose cash the rider still holds (cashInHand is their total). */
   codOrders?: number
+  /** Earnings in the wallet - credited at delivery, not yet withdrawn/paid out. */
+  walletBalance?: number
+  /** Withdrawal requests waiting for the admin. */
+  pendingWithdrawals?: number
+  /** What can be withdrawn now. */
+  availableToWithdraw?: number
+  /** Where withdrawals are paid, e.g. "UPI ravi@okhdfcbank"; null when none is on file. */
+  payoutTo?: string | null
 }
 
 export type AnalyticsPeriod = 'DAY' | 'WEEK' | 'MONTH' | 'CUSTOM'
