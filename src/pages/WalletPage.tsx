@@ -12,11 +12,58 @@ import type { RiderEarning, RiderEarningsSummary, RiderSettlement, RiderWalletTr
 type Tab = 'transactions' | 'pending' | 'settlements'
 
 /**
- * The rider's money at a glance. The top card separates what they've EARNED from what's actually
- * been PAID: pending earnings (credited per delivery, not yet paid out) minus the COD cash they're
- * holding = the net the next settlement will pay them (or that they owe, if negative). Every
+ * The rider's money at a glance, as two separate balances that are never netted: the COD cash they hold
+ * (all of it goes to the platform) and their earnings not yet paid out (all of it comes to them). Every
  * transaction, pending trip and settlement opens its own breakdown.
  */
+function WithdrawSheet({ available, payoutTo, onClose, onDone }: { available: number; payoutTo: string | null | undefined; onClose: () => void; onDone: () => void }) {
+  const [amount, setAmount] = useState(String(available))
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const value = Number(amount)
+
+  async function submit() {
+    setBusy(true)
+    setError(null)
+    try {
+      await earningsService.requestWithdrawal(value)
+      onDone()
+    } catch (err) {
+      setError((err as { message?: string })?.message ?? 'Could not request the withdrawal.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-900/60 px-4 pb-safe" onClick={onClose}>
+      <div className="mb-4 w-full max-w-md rounded-2xl bg-white p-5 dark:bg-slate-900" onClick={(e) => e.stopPropagation()}>
+        <h3 className="text-base font-bold text-slate-800 dark:text-slate-100">Withdraw from wallet</h3>
+        <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">Available {formatCurrency(available)}</p>
+        <div className="mt-4 flex items-center gap-2 rounded-xl border border-slate-200 px-3 dark:border-slate-700">
+          <span className="text-lg font-semibold text-slate-500">₹</span>
+          <input
+            className="w-full bg-transparent py-3 text-lg font-bold text-slate-800 outline-none dark:text-slate-100"
+            inputMode="decimal"
+            value={amount}
+            onChange={(e) => setAmount(e.target.value.replace(/[^\d.]/g, ''))}
+          />
+          <button type="button" className="text-xs font-semibold text-brand-600" onClick={() => setAmount(String(available))}>
+            Max
+          </button>
+        </div>
+        <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
+          {payoutTo ? `Paid to ${payoutTo}.` : 'Add your bank account or UPI ID to your profile first.'} The admin transfers it and marks it paid.
+        </p>
+        {error && <p className="mt-2 text-sm text-rose-600">{error}</p>}
+        <button className="btn-primary mt-4 w-full" onClick={submit} disabled={busy || !payoutTo || !(value > 0) || value > available}>
+          {busy ? 'Requesting...' : `Request ${value > 0 ? formatCurrency(value) : ''}`}
+        </button>
+      </div>
+    </div>
+  )
+}
+
 export default function WalletPage() {
   const [summary, setSummary] = useState<RiderEarningsSummary | null>(null)
   const [transactions, setTransactions] = useState<RiderWalletTransaction[] | null>(null)
@@ -25,6 +72,7 @@ export default function WalletPage() {
   const [tab, setTab] = useState<Tab>('transactions')
   const [openOrderId, setOpenOrderId] = useState<number | null>(null)
   const [openSettlementId, setOpenSettlementId] = useState<number | null>(null)
+  const [withdrawOpen, setWithdrawOpen] = useState(false)
 
   useEffect(() => {
     let cancelled = false
@@ -74,9 +122,6 @@ export default function WalletPage() {
     else if (t.kind === 'SETTLEMENT' && t.settlementId != null) setOpenSettlementId(t.settlementId)
   }
 
-  const net = summary?.netPending ?? 0
-  const netTitle = summary?.netDirection === 'COLLECTED_FROM_RIDER' ? 'You owe the platform' : 'Next settlement pays you'
-
   return (
     <div>
       <PageHeader
@@ -88,32 +133,51 @@ export default function WalletPage() {
         }
       />
       <div className="px-4 py-4">
-        {/* Brand green only when the rider is owed money - owing the platform shouldn't read as good news. */}
-        <div className={`card p-5 text-white ${summary?.netDirection === 'COLLECTED_FROM_RIDER' ? 'bg-slate-800 dark:bg-slate-800' : 'bg-brand-600'}`}>
-          <div className="flex items-center gap-3">
-            <span className="flex h-11 w-11 items-center justify-center rounded-full bg-white/15">
-              <WalletIcon size={20} />
-            </span>
-            <div>
-              <p className="text-xs text-white/75">{netTitle}</p>
-              <p className="text-2xl font-bold">{summary ? formatCurrency(Math.abs(net)) : '...'}</p>
+        {/* Two separate balances - never netted: all COD cash goes to the platform, all earnings come to you. */}
+        <div className="grid grid-cols-1 gap-3">
+          <div className="card bg-slate-800 p-5 text-white dark:bg-slate-800">
+            <div className="flex items-center gap-3">
+              <span className="flex h-11 w-11 items-center justify-center rounded-full bg-white/15">
+                <Banknote size={20} />
+              </span>
+              <div>
+                <p className="text-xs text-white/75">COD cash to hand over</p>
+                <p className="text-2xl font-bold">{summary ? formatCurrency(summary.cashInHand) : '...'}</p>
+              </div>
             </div>
+            <p className="mt-2 text-xs text-white/70">
+              {summary ? `Cash collected on ${summary.codOrders ?? 0} COD order(s). Hand over the full amount at your next settlement.` : ''}
+            </p>
           </div>
-          <div className="mt-4 grid grid-cols-2 gap-2 text-xs">
-            <div className="rounded-xl bg-white/10 p-2.5">
-              <p className="text-white/70">Earnings not yet paid</p>
-              <p className="mt-0.5 text-sm font-bold">{summary ? formatCurrency(summary.pendingEarnings) : '...'}</p>
-              <p className="text-white/60">{summary ? `${summary.unsettledTrips} trip(s)` : ''}</p>
+          <div className="card bg-brand-600 p-5 text-white">
+            <div className="flex items-center gap-3">
+              <span className="flex h-11 w-11 items-center justify-center rounded-full bg-white/15">
+                <WalletIcon size={20} />
+              </span>
+              <div className="min-w-0 flex-1">
+                <p className="text-xs text-white/75">Wallet balance (your earnings)</p>
+                <p className="text-2xl font-bold">{summary ? formatCurrency(summary.walletBalance ?? summary.pendingEarnings) : '...'}</p>
+              </div>
+              <button
+                className="shrink-0 rounded-full bg-white px-4 py-2 text-sm font-semibold text-brand-700 disabled:opacity-50"
+                onClick={() => setWithdrawOpen(true)}
+                disabled={!summary || (summary.availableToWithdraw ?? 0) <= 0}
+              >
+                Withdraw
+              </button>
             </div>
-            <div className="rounded-xl bg-white/10 p-2.5">
-              <p className="flex items-center gap-1 text-white/70">
-                <Banknote size={12} /> COD cash in hand
-              </p>
-              <p className="mt-0.5 text-sm font-bold">{summary ? `- ${formatCurrency(summary.cashInHand)}` : '...'}</p>
-              <p className="text-white/60">deducted at settlement</p>
-            </div>
+            <p className="mt-2 text-xs text-white/75">
+              {summary && (summary.pendingWithdrawals ?? 0) > 0
+                ? `${formatCurrency(summary.pendingWithdrawals ?? 0)} withdrawal requested - waiting to be paid. Available: ${formatCurrency(summary.availableToWithdraw ?? 0)}.`
+                : 'Commission + tips from your deliveries. Withdraw any time, or the platform pays it out to your bank/UPI.'}
+            </p>
           </div>
         </div>
+        {summary && (summary.openOrders ?? 0) > 0 && (
+          <p className="mt-2 text-center text-[11px] text-slate-400">
+            {summary.openOrders} order(s) since your last settlement · order value {formatCurrency(summary.openOrderValue ?? 0)}
+          </p>
+        )}
 
         {summary && (
           <div className="mt-3 grid grid-cols-2 gap-3">
@@ -130,7 +194,11 @@ export default function WalletPage() {
               <p className="text-[11px] text-slate-400">Last settlement</p>
               {summary.lastSettlement ? (
                 <>
-                  <p className="text-sm font-bold text-slate-800 dark:text-slate-100">{formatCurrency(Math.abs(summary.lastSettlement.netAmount))}</p>
+                  <p className="text-sm font-bold text-slate-800 dark:text-slate-100">
+                    {summary.lastSettlement.codAmount > 0 && `Cash ${formatCurrency(summary.lastSettlement.codAmount)}`}
+                    {summary.lastSettlement.codAmount > 0 && summary.lastSettlement.earningsAmount > 0 && ' · '}
+                    {summary.lastSettlement.earningsAmount > 0 && `Paid ${formatCurrency(summary.lastSettlement.earningsAmount)}`}
+                  </p>
                   <p className="text-[11px] text-slate-400">{formatDate(summary.lastSettlement.createdAt, false)}</p>
                 </>
               ) : (
@@ -142,7 +210,7 @@ export default function WalletPage() {
 
         <p className="mt-3 flex items-start gap-1.5 text-[11px] text-slate-400">
           <Info size={12} className="mt-0.5 shrink-0" />
-          Earnings are added to your wallet as soon as you deliver. They're paid out when the platform settles with you; cash you collected on COD orders is deducted at that point.
+          Earnings are added to your wallet as soon as you deliver and are paid out in full when the platform settles with you. COD cash is separate: you hand over all of it - it's never deducted from your earnings.
         </p>
 
         <div className="mt-5 flex rounded-xl bg-slate-100 p-1 text-xs font-semibold dark:bg-slate-800">
@@ -254,6 +322,18 @@ export default function WalletPage() {
           onOpenSettlement={(id) => {
             setOpenOrderId(null)
             setOpenSettlementId(id)
+          }}
+        />
+      )}
+      {withdrawOpen && summary && (
+        <WithdrawSheet
+          available={summary.availableToWithdraw ?? 0}
+          payoutTo={summary.payoutTo}
+          onClose={() => setWithdrawOpen(false)}
+          onDone={() => {
+            setWithdrawOpen(false)
+            setSettlements(null)
+            earningsService.summary().then(setSummary).catch(() => undefined)
           }}
         />
       )}

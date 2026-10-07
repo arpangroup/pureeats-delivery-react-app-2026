@@ -3,7 +3,7 @@ import { mockDelay, nextMockId } from '@/lib/mockUtils'
 import { IS_MOCK } from '@/config/env'
 import { users } from '@/mocks/fixtures/users'
 import { riderProfilesByUserId } from '@/mocks/fixtures/riderProfile'
-import type { Gender, RiderProfile } from '@/types/entities'
+import type { Gender, PartnerApplication, RiderProfile } from '@/types/entities'
 
 export interface RiderProfileInput {
   name?: string
@@ -91,6 +91,61 @@ export const riderProfileService = {
     })
     if (payload.photo) return riderProfileService.uploadPhoto(payload.photo)
     return data.data
+  },
+
+  /**
+   * Applies to become a delivery partner (or resubmits after a rejection): licence, ID proof, vehicle and
+   * payout details, then the licence photo. The application waits for admin approval (status PENDING).
+   */
+  async submitApplication(userId: number, application: PartnerApplication, licensePhoto: File | null, resubmit: boolean): Promise<RiderProfile> {
+    const body = {
+      name: application.name.trim(),
+      vehicleNumber: application.vehicleNumber.trim(),
+      licenseNumber: application.licenseNumber,
+      idProofType: application.idProofType,
+      idProofNumber: application.idProofNumber,
+      vehicleType: application.vehicleType,
+      payoutMethod: application.payoutMethod,
+      bankAccountHolder: application.payoutMethod === 'BANK' ? application.bankAccountHolder : null,
+      bankAccountNumber: application.payoutMethod === 'BANK' ? application.bankAccountNumber : null,
+      bankIfsc: application.payoutMethod === 'BANK' ? application.bankIfsc : null,
+      upiId: application.payoutMethod === 'UPI' ? application.upiId : null,
+    }
+    if (IS_MOCK) {
+      await mockDelay()
+      const user = users.find((u) => u.id === userId)
+      const profile: RiderProfile = {
+        ...(riderProfilesByUserId[userId] ?? {
+          id: nextMockId(), userId, email: user?.email ?? '', phone: user?.phone ?? '', photo: null, age: null, gender: null, description: '',
+          commissionRate: 0, maxAcceptDeliveryLimit: 1, rating: 0, isNotifiable: true, isOnline: false, isActive: true,
+        }),
+        name: body.name,
+        vehicleNumber: body.vehicleNumber,
+        approvalStatus: 'PENDING',
+        rejectionReason: null,
+        licenseNumber: body.licenseNumber,
+        licensePhotoUrl: licensePhoto ? URL.createObjectURL(licensePhoto) : riderProfilesByUserId[userId]?.licensePhotoUrl ?? null,
+        idProofType: body.idProofType,
+        idProofNumberMasked: body.idProofNumber.slice(-4).padStart(body.idProofNumber.length, 'X'),
+        vehicleType: body.vehicleType,
+        payoutMethod: body.payoutMethod,
+        upiId: body.upiId,
+        bankAccountHolder: body.bankAccountHolder,
+        bankAccountNumberMasked: body.bankAccountNumber ? body.bankAccountNumber.slice(-4).padStart(body.bankAccountNumber.length, 'X') : null,
+        bankIfsc: body.bankIfsc,
+      }
+      riderProfilesByUserId[userId] = profile
+      if (user) user.role = 'delivery-guy'
+      return profile
+    }
+    const { data } = resubmit
+      ? await apiClient.put<{ data: RiderProfile }>('/users/me/rider-profile', body)
+      : await apiClient.post<{ data: RiderProfile }>('/users/me/rider-profile', body)
+    if (!licensePhoto) return data.data
+    const form = new FormData()
+    form.append('file', licensePhoto)
+    const photo = await apiClient.post<{ data: RiderProfile }>('/users/me/rider-profile/license-photo', form)
+    return photo.data.data
   },
 
   /** Separate multipart action, mirroring the customer app's own profile-photo upload - a file is

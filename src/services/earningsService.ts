@@ -263,6 +263,9 @@ function nEarning(e: RiderEarning): RiderEarning {
     codCollected: toNumber(e.codCollected),
   }
 }
+/** Mock: amount requested for withdrawal and not yet paid. */
+let mockWithdrawn = 0
+
 function nSettlement(s: RiderSettlement): RiderSettlement {
   return { ...s, earningsAmount: toNumber(s.earningsAmount), codAmount: toNumber(s.codAmount), netAmount: toNumber(s.netAmount) }
 }
@@ -300,6 +303,11 @@ export const earningsService = {
         unsettledTrips: pending.length,
         settledEarnings: Math.round((lifetime - pendingEarnings) * 100) / 100,
         lastSettlement: mockSettlements()[0] ?? null,
+        codOrders: pending.filter((t) => t.codCollected > 0).length,
+        walletBalance: pendingEarnings,
+        pendingWithdrawals: mockWithdrawn,
+        availableToWithdraw: Math.max(0, Math.round((pendingEarnings - mockWithdrawn) * 100) / 100),
+        payoutTo: 'UPI demo.rider@okhdfcbank',
       }
     }
     const { data } = await apiClient.get<{ data: RiderEarningsSummary }>('/delivery/earnings/summary')
@@ -312,7 +320,21 @@ export const earningsService = {
       netPending: toNumber(s.netPending),
       settledEarnings: toNumber(s.settledEarnings),
       lastSettlement: s.lastSettlement ? nSettlement(s.lastSettlement) : null,
+      walletBalance: toNumber(s.walletBalance ?? s.pendingEarnings),
+      pendingWithdrawals: toNumber(s.pendingWithdrawals ?? 0),
+      availableToWithdraw: toNumber(s.availableToWithdraw ?? s.pendingEarnings),
     }
+  },
+
+  /** Asks the admin to pay `amount` from the wallet to the bank account / UPI ID on file. */
+  async requestWithdrawal(amount: number): Promise<RiderSettlement> {
+    if (IS_MOCK) {
+      await mockDelay()
+      mockWithdrawn += amount
+      return { id: Date.now(), earningsAmount: amount, codAmount: 0, netAmount: amount, direction: 'PAID_TO_RIDER', tripCount: 0, transactionMode: 'UPI', transactionReference: null, note: 'Withdrawal request', createdAt: new Date().toISOString(), status: 'REQUESTED', requestedAt: new Date().toISOString(), paidAt: null }
+    }
+    const { data } = await apiClient.post<{ data: RiderSettlement }>('/delivery/wallet/withdrawals', { amount })
+    return nSettlement(data.data)
   },
 
   async earnings(onlyPending = false): Promise<RiderEarning[]> {

@@ -161,6 +161,39 @@ export interface RiderProfile {
   isNotifiable: boolean
   isOnline: boolean
   isActive: boolean
+  /** Only APPROVED partners can go online and take orders; legacy accounts report APPROVED. */
+  approvalStatus?: ApprovalStatus
+  rejectionReason?: string | null
+  licenseNumber?: string | null
+  licensePhotoUrl?: string | null
+  idProofType?: IdProofType | null
+  idProofNumberMasked?: string | null
+  vehicleType?: VehicleType | null
+  payoutMethod?: PayoutMethod | null
+  bankAccountHolder?: string | null
+  bankAccountNumberMasked?: string | null
+  bankIfsc?: string | null
+  upiId?: string | null
+}
+
+export type ApprovalStatus = 'PENDING' | 'APPROVED' | 'REJECTED'
+export type IdProofType = 'AADHAAR' | 'PAN'
+export type VehicleType = 'BIKE' | 'CYCLE' | 'EV'
+export type PayoutMethod = 'BANK' | 'UPI'
+
+/** What a partner submits to apply (and resubmits after a rejection). */
+export interface PartnerApplication {
+  name: string
+  licenseNumber: string
+  idProofType: IdProofType
+  idProofNumber: string
+  vehicleType: VehicleType
+  vehicleNumber: string
+  payoutMethod: PayoutMethod
+  bankAccountHolder: string
+  bankAccountNumber: string
+  bankIfsc: string
+  upiId: string
 }
 
 export interface WalletTransaction {
@@ -200,7 +233,8 @@ export interface RiderEarning {
   settledAt: string | null
 }
 
-export type SettlementDirection = 'PAID_TO_RIDER' | 'COLLECTED_FROM_RIDER' | 'EVEN'
+/** BOTH = COD cash collected and earnings paid in the same settlement (they're never netted). */
+export type SettlementDirection = 'PAID_TO_RIDER' | 'COLLECTED_FROM_RIDER' | 'EVEN' | 'BOTH'
 
 export interface RiderSettlement {
   id: number
@@ -213,6 +247,10 @@ export interface RiderSettlement {
   transactionReference: string | null
   note: string | null
   createdAt: string
+  /** REQUESTED = a withdrawal waiting for the admin; PAID; REJECTED. */
+  status?: 'REQUESTED' | 'PAID' | 'REJECTED'
+  requestedAt?: string | null
+  paidAt?: string | null
 }
 
 /** Where the rider stands - GET /delivery/earnings/summary. netPending = pendingEarnings - cashInHand. */
@@ -226,6 +264,19 @@ export interface RiderEarningsSummary {
   unsettledTrips: number
   settledEarnings: number
   lastSettlement: RiderSettlement | null
+  /** Delivered orders not fully settled yet, and what customers paid for them. */
+  openOrders?: number
+  openOrderValue?: number
+  /** COD orders whose cash the rider still holds (cashInHand is their total). */
+  codOrders?: number
+  /** Earnings in the wallet - credited at delivery, not yet withdrawn/paid out. */
+  walletBalance?: number
+  /** Withdrawal requests waiting for the admin. */
+  pendingWithdrawals?: number
+  /** What can be withdrawn now. */
+  availableToWithdraw?: number
+  /** Where withdrawals are paid, e.g. "UPI ravi@okhdfcbank"; null when none is on file. */
+  payoutTo?: string | null
 }
 
 export type AnalyticsPeriod = 'DAY' | 'WEEK' | 'MONTH' | 'CUSTOM'
