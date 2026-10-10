@@ -6,7 +6,7 @@ name: Deploy delivery partner app
 # admin apps' own deploy.yml — same server, same deploy user, same secrets.
 on:
   push:
-    branches: [main]
+    branches: [release/2026.10.10]
   workflow_dispatch: {}
 
 concurrency:
