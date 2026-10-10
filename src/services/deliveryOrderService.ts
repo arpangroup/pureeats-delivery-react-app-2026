@@ -139,6 +139,9 @@ export const deliveryOrderService = {
         payable: Math.round(template.payoutEstimate * 8),
         pickupDueAt: tpl.pickupDueAt ?? new Date(Date.now() + 10 * 60_000).toISOString(),
         pickupPhotoCount: 0,
+        riderToRestaurantMinutes: 10,
+        reachRestaurantBy: new Date(Date.now() + 10 * 60_000).toISOString(),
+        travelMinutes: Math.round(template.distanceKm * 3),
         orderComment: template.id % 2 === 0 ? 'Please ring the bell twice - the baby is asleep.' : null,
         restaurantName: template.restaurantName,
         restaurantAddress: template.restaurantAddress,
@@ -226,6 +229,17 @@ export const deliveryOrderService = {
       return
     }
     await apiClient.delete(`/delivery/orders/${orderId}/${PHOTO_PATH[kind]}/${photoId}`)
+  },
+
+  /** Live drop-off ETA: travel time from the partner's last position to the customer (from the restaurant before pickup). */
+  async liveEta(orderId: number): Promise<{ minutes: number; distanceKm: number }> {
+    if (IS_MOCK) {
+      await mockDelay(80)
+      const active = currentActive
+      return { minutes: Math.max(3, Math.round((active?.distanceKm ?? 3) * 3)), distanceKm: active?.distanceKm ?? 3 }
+    }
+    const { data } = await apiClient.get<{ data: { minutes: number; distanceKm: number | string } }>(`/delivery/orders/${orderId}/eta`)
+    return { minutes: Number(data.data.minutes), distanceKm: Number(data.data.distanceKm) }
   },
 
   /** Online/offline history (incl. automatic offline) and recent sign-ins. */

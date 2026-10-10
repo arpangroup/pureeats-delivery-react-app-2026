@@ -122,6 +122,12 @@ export interface ActiveDelivery {
   deliveryPhotoCount?: number
   /** The customer's note for the order (e.g. "leave at the door"), or null. */
   orderComment?: string | null
+  /** T2 - minutes allowed to reach the restaurant. */
+  riderToRestaurantMinutes?: number
+  /** acceptedAt + T2 - target of the "reach the restaurant" countdown. */
+  reachRestaurantBy?: string | null
+  /** T3 - restaurant to customer minutes, estimated when the order was placed. */
+  travelMinutes?: number | null
   createdAt: string
   acceptedAt: string | null
   pickedUpAt: string | null
