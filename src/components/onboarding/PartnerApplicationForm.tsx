@@ -5,7 +5,7 @@ import { userService } from '@/services/userService'
 import { classNames } from '@/lib/format'
 import { showErrorToast } from '@/lib/errorToast'
 import { compressImage } from '@/lib/imageCompress'
-import type { IdProofType, PartnerApplication, PayoutMethod, RiderProfile, VehicleType } from '@/types/entities'
+import type { PartnerApplication, PayoutMethod, RiderProfile, VehicleType } from '@/types/entities'
 
 /** Same rules the server applies (RiderKyc) - so every problem is shown here, next to its field. */
 const LICENSE_RE = /^[A-Z]{2}\d{2}[A-Z0-9]{8,14}$/
@@ -16,7 +16,7 @@ const ACCOUNT_RE = /^\d{9,18}$/
 const UPI_RE = /^[A-Za-z0-9._-]{2,256}@[A-Za-z]{2,64}$/
 const compact = (v: string) => v.replace(/[\s-]/g, '').toUpperCase()
 
-type FieldKey = 'phone' | 'name' | 'licenseNumber' | 'licensePhoto' | 'idProofNumber' | 'vehicleNumber' | 'upiId' | 'bankAccountHolder' | 'bankAccountNumber' | 'bankIfsc'
+type FieldKey = 'phone' | 'name' | 'licenseNumber' | 'licensePhoto' | 'aadhaarNumber' | 'panNumber' | 'vehicleNumber' | 'upiId' | 'bankAccountHolder' | 'bankAccountNumber' | 'bankIfsc'
 
 /** Field -> what's wrong with it (only invalid fields are present). */
 function validate(form: PartnerApplication, hasPhone: boolean, hasLicensePhoto: boolean): Partial<Record<FieldKey, string>> {
@@ -27,12 +27,13 @@ function validate(form: PartnerApplication, hasPhone: boolean, hasLicensePhoto: 
   if (!dl) e.licenseNumber = 'Enter your driving licence number.'
   else if (!LICENSE_RE.test(dl)) e.licenseNumber = `Not a valid DL number - it starts with the state code and RTO number, e.g. KA0520190001234 (${dl.length} characters entered).`
   if (!hasLicensePhoto) e.licensePhoto = 'Add a clear photo of the front of your licence.'
-  const id = compact(form.idProofNumber)
-  if (form.idProofType === 'AADHAAR') {
-    if (!id) e.idProofNumber = 'Enter your 12-digit Aadhaar number.'
-    else if (!AADHAAR_RE.test(id)) e.idProofNumber = `Aadhaar number must be exactly 12 digits (you entered ${id.length}).`
-  } else if (!id) e.idProofNumber = 'Enter your PAN.'
-  else if (!PAN_RE.test(id)) e.idProofNumber = 'PAN is 10 characters: 5 letters, 4 digits, 1 letter - e.g. ABCDE1234F.'
+  // Both Aadhaar AND PAN are required.
+  const aadhaar = compact(form.aadhaarNumber)
+  if (!aadhaar) e.aadhaarNumber = 'Enter your 12-digit Aadhaar number.'
+  else if (!AADHAAR_RE.test(aadhaar)) e.aadhaarNumber = `Aadhaar number must be exactly 12 digits (you entered ${aadhaar.length}).`
+  const pan = compact(form.panNumber)
+  if (!pan) e.panNumber = 'Enter your PAN.'
+  else if (!PAN_RE.test(pan)) e.panNumber = 'PAN is 10 characters: 5 letters, 4 digits, 1 letter - e.g. ABCDE1234F.'
   if (form.vehicleType !== 'CYCLE' && form.vehicleNumber.trim().length < 4) e.vehicleNumber = 'Enter your vehicle registration number, e.g. KA-05-HH-1234.'
   if (form.payoutMethod === 'UPI') {
     if (!form.upiId.trim()) e.upiId = 'Enter your UPI ID.'
@@ -146,7 +147,7 @@ function MobileVerification({ userId, phone, verified, onVerified }: { userId: n
 }
 
 /**
- * Become a delivery partner: name, OTP-verified mobile, driving licence (number + photo), Aadhaar or PAN,
+ * Become a delivery partner: name, OTP-verified mobile, driving licence (number + photo), Aadhaar AND PAN,
  * vehicle type and number, and where to be paid (bank or UPI). Also used to correct and resubmit a
  * rejected application. The server validates everything again; the application then waits for approval.
  */
@@ -175,8 +176,8 @@ export function PartnerApplicationForm({
   const [form, setForm] = useState<PartnerApplication>({
     name: existing?.name ?? defaultName,
     licenseNumber: existing?.licenseNumber ?? '',
-    idProofType: existing?.idProofType ?? 'AADHAAR',
-    idProofNumber: '',
+    aadhaarNumber: '',
+    panNumber: '',
     vehicleType: existing?.vehicleType ?? 'BIKE',
     vehicleNumber: existing?.vehicleNumber ?? '',
     payoutMethod: existing?.payoutMethod ?? 'UPI',
@@ -226,7 +227,8 @@ export function PartnerApplicationForm({
     name: form.name.length > 0,
     licenseNumber: form.licenseNumber.length > 0,
     licensePhoto: false,
-    idProofNumber: form.idProofNumber.length > 0,
+    aadhaarNumber: form.aadhaarNumber.length > 0,
+    panNumber: form.panNumber.length > 0,
     vehicleNumber: form.vehicleNumber.length > 0,
     upiId: form.upiId.length > 0,
     bankAccountHolder: form.bankAccountHolder.length > 0,
@@ -309,19 +311,22 @@ export function PartnerApplicationForm({
 
       <section className="space-y-3">
         <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-200">ID proof</h3>
-        <Segmented<IdProofType> value={form.idProofType} options={[{ value: 'AADHAAR', label: 'Aadhaar' }, { value: 'PAN', label: 'PAN' }]} onChange={(v) => set('idProofType', v)} />
+        <p className="text-xs text-slate-500 dark:text-slate-400">Both your Aadhaar and your PAN are needed.</p>
         <Field
-          label={form.idProofType === 'AADHAAR' ? 'Aadhaar number' : 'PAN'}
+          label="Aadhaar number"
           required
-          hint={existing?.idProofNumberMasked ? `On file: ${existing.idProofNumberMasked} - enter it again to resubmit.` : undefined}
-          error={errorFor('idProofNumber')}
+          hint={existing?.aadhaarNumberMasked ? `On file: ${existing.aadhaarNumberMasked} - enter it again to resubmit.` : undefined}
+          error={errorFor('aadhaarNumber')}
         >
-          <TextInput
-            value={form.idProofNumber}
-            onChange={(e) => set('idProofNumber', form.idProofType === 'AADHAAR' ? e.target.value.replace(/[^\d ]/g, '') : e.target.value.toUpperCase())}
-            inputMode={form.idProofType === 'AADHAAR' ? 'numeric' : 'text'}
-            placeholder={form.idProofType === 'AADHAAR' ? '1234 5678 9012' : 'ABCDE1234F'}
-          />
+          <TextInput value={form.aadhaarNumber} onChange={(e) => set('aadhaarNumber', e.target.value.replace(/[^\d ]/g, ''))} inputMode="numeric" placeholder="1234 5678 9012" />
+        </Field>
+        <Field
+          label="PAN"
+          required
+          hint={existing?.panNumberMasked ? `On file: ${existing.panNumberMasked} - enter it again to resubmit.` : undefined}
+          error={errorFor('panNumber')}
+        >
+          <TextInput value={form.panNumber} onChange={(e) => set('panNumber', e.target.value.toUpperCase())} placeholder="ABCDE1234F" maxLength={10} />
         </Field>
       </section>
 

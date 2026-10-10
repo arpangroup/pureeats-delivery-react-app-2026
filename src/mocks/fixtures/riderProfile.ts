@@ -24,6 +24,8 @@ export const riderProfilesByUserId: Record<number, RiderProfile> = {
     licenseNumber: 'KA0520190001234',
     idProofType: 'AADHAAR',
     idProofNumberMasked: 'XXXXXXXX9012',
+    aadhaarNumberMasked: 'XXXXXXXX9012',
+    panNumberMasked: 'XXXXXX234F',
     payoutMethod: 'UPI',
     upiId: 'demo.rider@okhdfcbank',
   },

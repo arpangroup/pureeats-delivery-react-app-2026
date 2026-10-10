@@ -174,6 +174,9 @@ export interface RiderProfile {
   licensePhotoUrl?: string | null
   idProofType?: IdProofType | null
   idProofNumberMasked?: string | null
+  /** Both Aadhaar and PAN are required; null when not on file (older single-ID applications). */
+  aadhaarNumberMasked?: string | null
+  panNumberMasked?: string | null
   vehicleType?: VehicleType | null
   payoutMethod?: PayoutMethod | null
   bankAccountHolder?: string | null
@@ -191,8 +194,9 @@ export type PayoutMethod = 'BANK' | 'UPI'
 export interface PartnerApplication {
   name: string
   licenseNumber: string
-  idProofType: IdProofType
-  idProofNumber: string
+  /** Both are required. */
+  aadhaarNumber: string
+  panNumber: string
   vehicleType: VehicleType
   vehicleNumber: string
   payoutMethod: PayoutMethod

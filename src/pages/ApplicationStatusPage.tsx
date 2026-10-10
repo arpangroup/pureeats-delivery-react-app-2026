@@ -79,7 +79,8 @@ export function ApplicationStatusPage({ profile, onChanged, onRefresh }: { profi
         <Row label="Name" value={profile.name} />
         <Row label="Mobile" value={profile.phone} />
         <Row label="Driving licence" value={profile.licenseNumber} />
-        <Row label={profile.idProofType === 'PAN' ? 'PAN' : 'Aadhaar'} value={profile.idProofNumberMasked} />
+        <Row label="Aadhaar" value={profile.aadhaarNumberMasked} />
+        <Row label="PAN" value={profile.panNumberMasked} />
         <Row label="Vehicle" value={[profile.vehicleType ? VEHICLE_LABEL[profile.vehicleType] : null, profile.vehicleNumber].filter(Boolean).join(' · ')} />
         <Row label="Payout" value={profile.payoutMethod === 'BANK' ? `Bank ${profile.bankAccountNumberMasked ?? ''}` : profile.upiId} />
       </div>
