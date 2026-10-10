@@ -270,12 +270,16 @@ export const deliveryOrderService = {
   },
 
   /** Completes the delivery. The caller already holds the ActiveDelivery and flips it to DELIVERED itself. */
-  async deliver(orderId: number, deliveryPin: string): Promise<void> {
+  /** @param cashCollected cash on delivery: what the customer handed over (at least the amount due; the extra goes to their wallet). */
+  async deliver(orderId: number, deliveryPin: string, cashCollected?: number | null): Promise<void> {
     if (IS_MOCK) {
       await mockDelay(300)
       if (!currentActive || currentActive.id !== orderId) throw { message: 'No active delivery matches this order.' }
       if (currentActive.status !== 'ARRIVED') throw { message: "Mark that you've reached the customer's location first." }
       if (mockPhotos.delivery.length === 0) throw { message: 'Take a photo of the order being handed over before confirming delivery.' }
+      if (paymentLabel(currentActive.paymentMode) === 'COD' && (cashCollected == null || cashCollected < (currentActive.payable ?? 0))) {
+        throw { message: 'Confirm how much cash you collected from the customer.' }
+      }
       if (deliveryPin !== MOCK_DELIVERY_PIN) throw { message: `Incorrect PIN. Ask the customer to read out their delivery PIN (mock mode: ${MOCK_DELIVERY_PIN}).` }
       const delivered: ActiveDelivery = { ...currentActive, status: 'DELIVERED', deliveredAt: new Date().toISOString() }
       sessionHistory.unshift({
@@ -292,7 +296,7 @@ export const deliveryOrderService = {
       currentActive = null
       return
     }
-    await apiClient.post(`/delivery/orders/${orderId}/deliver`, { deliveryPin })
+    await apiClient.post(`/delivery/orders/${orderId}/deliver`, { deliveryPin, cashCollected: cashCollected ?? null })
   },
 
   /**

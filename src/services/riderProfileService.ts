@@ -8,8 +8,8 @@ import type { Gender, PartnerApplication, RiderProfile } from '@/types/entities'
 /** One group of document/payout fields to change (only what's sent changes). */
 export interface DocumentChanges {
   licenseNumber?: string
-  idProofType?: 'AADHAAR' | 'PAN'
-  idProofNumber?: string
+  aadhaarNumber?: string
+  panNumber?: string
   vehicleType?: 'BIKE' | 'CYCLE' | 'EV'
   payoutMethod?: 'BANK' | 'UPI'
   bankAccountHolder?: string
@@ -26,6 +26,9 @@ export interface RiderProfileInput {
   description: string
   photo?: File | null
 }
+
+/** Everything but the last 4 characters hidden, like the server's masking. */
+const maskTail = (v: string) => v.slice(-4).padStart(v.length, 'X')
 
 export const riderProfileService = {
   async getMyProfile(userId: number): Promise<RiderProfile | null> {
@@ -115,8 +118,8 @@ export const riderProfileService = {
       name: application.name.trim(),
       vehicleNumber: application.vehicleNumber.trim(),
       licenseNumber: application.licenseNumber,
-      idProofType: application.idProofType,
-      idProofNumber: application.idProofNumber,
+      aadhaarNumber: application.aadhaarNumber,
+      panNumber: application.panNumber,
       vehicleType: application.vehicleType,
       payoutMethod: application.payoutMethod,
       bankAccountHolder: application.payoutMethod === 'BANK' ? application.bankAccountHolder : null,
@@ -139,8 +142,8 @@ export const riderProfileService = {
         licenseNumber: body.licenseNumber,
         licensePhotoUrl: licensePhoto ? URL.createObjectURL(licensePhoto) : riderProfilesByUserId[userId]?.licensePhotoUrl ?? null,
         photo: profilePhoto ? URL.createObjectURL(profilePhoto) : riderProfilesByUserId[userId]?.photo ?? null,
-        idProofType: body.idProofType,
-        idProofNumberMasked: body.idProofNumber.slice(-4).padStart(body.idProofNumber.length, 'X'),
+        aadhaarNumberMasked: maskTail(body.aadhaarNumber.replace(/\s/g, '')),
+        panNumberMasked: maskTail(body.panNumber.toUpperCase()),
         vehicleType: body.vehicleType,
         payoutMethod: body.payoutMethod,
         upiId: body.upiId,
@@ -185,7 +188,13 @@ export const riderProfileService = {
   async updateDocuments(profile: RiderProfile, changes: DocumentChanges): Promise<RiderProfile> {
     if (IS_MOCK) {
       await mockDelay()
-      const updated: RiderProfile = { ...profile, ...changes, idProofNumberMasked: changes.idProofNumber ? changes.idProofNumber.slice(-4).padStart(changes.idProofNumber.length, 'X') : profile.idProofNumberMasked }
+      const { aadhaarNumber, panNumber, ...rest } = changes
+      const updated: RiderProfile = {
+        ...profile,
+        ...rest,
+        aadhaarNumberMasked: aadhaarNumber ? maskTail(aadhaarNumber.replace(/\s/g, '')) : profile.aadhaarNumberMasked,
+        panNumberMasked: panNumber ? maskTail(panNumber.toUpperCase()) : profile.panNumberMasked,
+      }
       riderProfilesByUserId[profile.userId] = updated
       return updated
     }

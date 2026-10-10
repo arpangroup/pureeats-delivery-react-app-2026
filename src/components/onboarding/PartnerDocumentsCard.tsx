@@ -49,7 +49,7 @@ export function PartnerDocumentsCard({ profile, onChanged }: { profile: RiderPro
       group === 'license'
         ? { licenseNumber: profile.licenseNumber ?? '' }
         : group === 'idProof'
-          ? { idProofType: profile.idProofType ?? 'AADHAAR', idProofNumber: '' }
+          ? { aadhaarNumber: '', panNumber: '' }
           : group === 'vehicleType'
             ? { vehicleType: profile.vehicleType ?? 'BIKE' }
             : { payoutMethod: profile.payoutMethod ?? 'UPI', upiId: profile.upiId ?? '', bankAccountHolder: profile.bankAccountHolder ?? '', bankAccountNumber: '', bankIfsc: profile.bankIfsc ?? '' },
@@ -92,11 +92,9 @@ export function PartnerDocumentsCard({ profile, onChanged }: { profile: RiderPro
       )}
       {editing === 'idProof' && (
         <>
-          <select className="input" value={draft.idProofType} onChange={(e) => set({ idProofType: e.target.value as IdProofType })}>
-            <option value="AADHAAR">Aadhaar</option>
-            <option value="PAN">PAN</option>
-          </select>
-          <TextInput value={draft.idProofNumber ?? ''} onChange={(e) => set({ idProofNumber: e.target.value.toUpperCase() })} placeholder={draft.idProofType === 'PAN' ? 'ABCDE1234F' : '1234 5678 9012'} />
+          <TextInput value={draft.aadhaarNumber ?? ''} onChange={(e) => set({ aadhaarNumber: e.target.value.replace(/[^\d ]/g, '') })} inputMode="numeric" placeholder="Aadhaar - 1234 5678 9012" />
+          <TextInput value={draft.panNumber ?? ''} onChange={(e) => set({ panNumber: e.target.value.toUpperCase() })} placeholder="PAN - ABCDE1234F" maxLength={10} />
+          <p className="text-[11px] text-slate-400">Fill in the one you want to change - the other stays as it is.</p>
         </>
       )}
       {editing === 'vehicleType' && (
@@ -160,7 +158,8 @@ export function PartnerDocumentsCard({ profile, onChanged }: { profile: RiderPro
           )}
           <input ref={fileRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={pickLicensePhoto} />
         </div>
-        <Row label={profile.idProofType === 'PAN' ? 'PAN' : 'Aadhaar'} value={profile.idProofNumberMasked} editable={can.idProof} onEdit={() => start('idProof')} />
+        <Row label="Aadhaar" value={profile.aadhaarNumberMasked ?? 'Not added'} editable={can.idProof} onEdit={() => start('idProof')} />
+        <Row label="PAN" value={profile.panNumberMasked ?? 'Not added'} editable={can.idProof} onEdit={() => start('idProof')} />
         {editing === 'idProof' && editor}
         <Row label="Vehicle type" value={profile.vehicleType ? VEHICLE[profile.vehicleType] : null} editable={can.vehicleType} onEdit={() => start('vehicleType')} />
         {editing === 'vehicleType' && editor}
