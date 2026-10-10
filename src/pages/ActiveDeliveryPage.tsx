@@ -6,6 +6,7 @@ import { LoadingBlock, EmptyState } from '@/components/ui/Feedback'
 import { TextInput } from '@/components/ui/FormControls'
 import { SwipeToAcceptButton } from '@/components/ui/SwipeToAcceptButton'
 import { OrderIdTag, OrderStatusBadge, PaymentBadge, PickupCountdown } from '@/components/order/OrderMeta'
+import { DeliveryTimingPanel } from '@/components/order/DeliveryTimingPanel'
 import { deliveryOrderService, MAX_PICKUP_PHOTOS, paymentLabel } from '@/services/deliveryOrderService'
 import { useRiderSession } from '@/context/RiderSessionContext'
 import { useDriverSettings } from '@/hooks/useDriverSettings'
@@ -184,6 +185,8 @@ export default function ActiveDeliveryPage() {
             </p>
           )}
         </div>
+
+        <DeliveryTimingPanel delivery={delivery} />
 
         {delivery.orderComment && (
           <div className="flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5 text-sm text-amber-900 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200">
