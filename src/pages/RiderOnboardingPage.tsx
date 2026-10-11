@@ -15,7 +15,7 @@ import { PartnerApplicationForm } from '@/components/onboarding/PartnerApplicati
  * their application status instead of orders (see ApplicationStatusPage).
  */
 export default function RiderOnboardingPage() {
-  const { user, logout } = useAuth()
+  const { user, logout, refreshUser } = useAuth()
   const navigate = useNavigate()
   const [done, setDone] = useState(false)
   /**
@@ -23,6 +23,12 @@ export default function RiderOnboardingPage() {
    * the mobile number already verified - instead of starting over (which used to fail with "already exists").
    */
   const [existing, setExisting] = useState<RiderProfile | null | undefined>(undefined)
+
+  // The stored user is a snapshot from sign-in - re-read it so the name, number and its verified state are current.
+  useEffect(() => {
+    refreshUser()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   useEffect(() => {
     if (!user) return
@@ -72,10 +78,11 @@ export default function RiderOnboardingPage() {
             userId={user.id}
             defaultName={existing?.name ?? user.name}
             phone={existing?.phone || user.phone || ''}
+            phoneVerified={!!(existing?.phoneVerified || user.phoneVerified)}
             existing={existing}
             submitLabel="Submit application"
-            onSubmit={async (application, licensePhoto, profilePhoto) => {
-              await riderProfileService.submitApplication(user.id, application, licensePhoto, !!existing, profilePhoto)
+            onSubmit={async (application, documents, profilePhoto) => {
+              await riderProfileService.submitApplication(user.id, application, documents, !!existing, profilePhoto)
               setDone(true)
             }}
           />
