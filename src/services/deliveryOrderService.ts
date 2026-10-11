@@ -111,6 +111,21 @@ export const MAX_PICKUP_PHOTOS = 3
 /** Mock mode: orders dismissed this session. */
 const mockDismissed = new Set<number>()
 
+/**
+ * Orders dismissed on this device: order id -> the offer round dismissed. Hidden from every available-orders list at
+ * once (the server hides them too, but a screen already showing the list kept it until its next refresh), until the
+ * order is offered again in a later round.
+ */
+const dismissedRounds = new Map<number, number>()
+
+/** Fired after a dismiss so screens showing the available orders re-read them. */
+export const AVAILABLE_ORDERS_CHANGED = 'pureeats:available-orders-changed'
+
+function hiddenByDismissal(o: AvailableOrder): boolean {
+  const round = dismissedRounds.get(o.id)
+  return round != null && (o.offerRound ?? 1) <= round
+}
+
 export const deliveryOrderService = {
   async listAvailable(): Promise<AvailableOrder[]> {
     if (IS_MOCK) {
@@ -120,11 +135,13 @@ export const deliveryOrderService = {
       return [...visibleOrders].filter((o) => !mockDismissed.has(o.id)).sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1))
     }
     const { data } = await apiClient.get<{ data: AvailableOrder[] }>('/delivery/orders/available')
-    return (data.data ?? []).map(normalizeAvailable)
+    return (data.data ?? []).map(normalizeAvailable).filter((o) => !hiddenByDismissal(o))
   },
 
   /** Not interested: the order disappears from this partner's available orders until it's offered again. */
-  async dismiss(orderId: number): Promise<void> {
+  async dismiss(orderId: number, offerRound = 1): Promise<void> {
+    dismissedRounds.set(orderId, Math.max(offerRound, dismissedRounds.get(orderId) ?? 0))
+    window.dispatchEvent(new window.Event(AVAILABLE_ORDERS_CHANGED))
     if (IS_MOCK) {
       await mockDelay(100)
       mockDismissed.add(orderId)

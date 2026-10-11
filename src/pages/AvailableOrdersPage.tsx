@@ -4,7 +4,7 @@ import { Store, MapPin, Package } from 'lucide-react'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { LoadingBlock, EmptyState } from '@/components/ui/Feedback'
 import { SwipeToAcceptButton } from '@/components/ui/SwipeToAcceptButton'
-import { deliveryOrderService } from '@/services/deliveryOrderService'
+import { AVAILABLE_ORDERS_CHANGED, deliveryOrderService } from '@/services/deliveryOrderService'
 import { useRiderSession } from '@/context/RiderSessionContext'
 import { useOnResume } from '@/hooks/useOnResume'
 import { timeAgo } from '@/lib/format'
@@ -40,7 +40,12 @@ export default function AvailableOrdersPage() {
   useEffect(() => {
     load()
     const intervalId = setInterval(load, REFRESH_INTERVAL_MS)
-    return () => clearInterval(intervalId)
+    // Dismissed from the full-screen alert (or here): drop it from the list now, not at the next refresh.
+    window.addEventListener(AVAILABLE_ORDERS_CHANGED, load)
+    return () => {
+      clearInterval(intervalId)
+      window.removeEventListener(AVAILABLE_ORDERS_CHANGED, load)
+    }
   }, [load])
 
   // Timers are throttled/frozen while the app is backgrounded - refresh the list the moment the
@@ -49,9 +54,10 @@ export default function AvailableOrdersPage() {
 
   /** Hidden until the order is offered again (if nobody takes it, it comes back after the re-alert interval). */
   async function handleDismiss(orderId: number) {
+    const round = orders?.find((o) => o.id === orderId)?.offerRound
     setOrders((list) => list?.filter((o) => o.id !== orderId) ?? null)
     try {
-      await deliveryOrderService.dismiss(orderId)
+      await deliveryOrderService.dismiss(orderId, round)
     } catch (err) {
       showErrorToast(err)
       load()
