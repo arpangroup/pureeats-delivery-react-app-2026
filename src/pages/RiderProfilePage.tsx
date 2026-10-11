@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { displayEmail } from '@/lib/contact'
 import { Link, useNavigate } from 'react-router-dom'
 import { ChevronRight, LogOut, ShieldOff, Wallet, Star, Bike, History, Mail, Phone } from 'lucide-react'
 import { PageHeader } from '@/components/layout/PageHeader'
@@ -77,7 +78,7 @@ export default function RiderProfilePage() {
             <Mail size={16} className="shrink-0 text-slate-400" />
             <div className="min-w-0">
               <p className="text-[11px] text-slate-400">Email</p>
-              <p className="truncate text-sm font-medium text-slate-700 dark:text-slate-200">{profile?.email || user?.email || '-'}</p>
+              <p className="truncate text-sm font-medium text-slate-700 dark:text-slate-200">{displayEmail(profile?.email) || displayEmail(user?.email) || '-'}</p>
             </div>
           </div>
         </div>

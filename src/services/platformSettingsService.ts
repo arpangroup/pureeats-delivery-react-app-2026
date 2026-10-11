@@ -15,14 +15,12 @@ export interface PlatformSettings {
   profileEditable: Record<ProfileField, boolean>
 }
 
-export type ProfileField = 'name' | 'vehicleNumber' | 'age' | 'gender' | 'about' | 'phone' | 'email' | 'license' | 'idProof' | 'vehicleType' | 'payout'
+export type ProfileField = 'name' | 'vehicleNumber' | 'photo' | 'phone' | 'email' | 'license' | 'idProof' | 'vehicleType' | 'payout'
 
 const PROFILE_KEYS: Record<ProfileField, string> = {
   name: 'driver_edit_name',
   vehicleNumber: 'driver_edit_vehicle_number',
-  age: 'driver_edit_age',
-  gender: 'driver_edit_gender',
-  about: 'driver_edit_about',
+  photo: 'driver_edit_photo',
   phone: 'driver_edit_phone',
   email: 'driver_edit_email',
   license: 'driver_edit_license',
@@ -34,9 +32,7 @@ const PROFILE_KEYS: Record<ProfileField, string> = {
 const LOCKED: Record<ProfileField, boolean> = {
   name: false,
   vehicleNumber: false,
-  age: false,
-  gender: false,
-  about: false,
+  photo: false,
   phone: false,
   email: false,
   license: false,
@@ -51,7 +47,7 @@ const DEFAULTS: PlatformSettings = { locationTrackingEnabled: true, orderAlertSo
 const MOCK_SETTINGS: PlatformSettings = {
   ...DEFAULTS,
   showPayout: true,
-  profileEditable: { ...LOCKED, name: true, vehicleNumber: true, age: true, gender: true, about: true },
+  profileEditable: { ...LOCKED, name: true, vehicleNumber: true, photo: true },
 }
 
 let latest: PlatformSettings = DEFAULTS

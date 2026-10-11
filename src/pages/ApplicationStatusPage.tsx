@@ -1,11 +1,70 @@
-import { useState } from 'react'
-import { Clock, LogOut, RefreshCw, XCircle } from 'lucide-react'
+import { useRef, useState, type ChangeEvent } from 'react'
+import { AlertTriangle, Camera, Clock, FileText, LogOut, RefreshCw, XCircle } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
-import { riderProfileService } from '@/services/riderProfileService'
+import { DOC_LABELS, riderProfileService } from '@/services/riderProfileService'
+import { DocumentUpload } from '@/components/onboarding/DocumentUpload'
+import { compressImage } from '@/lib/imageCompress'
+import { showErrorToast } from '@/lib/errorToast'
 import { PartnerApplicationForm } from '@/components/onboarding/PartnerApplicationForm'
-import type { RiderProfile } from '@/types/entities'
+import type { DocType, RiderProfile } from '@/types/entities'
 
 const VEHICLE_LABEL = { BIKE: 'Bike', CYCLE: 'Cycle', EV: 'EV' } as const
+
+/**
+ * Documents (or the photo) the application still lacks - uploaded right here, each on its own, since an admin
+ * can't approve until nothing is missing.
+ */
+function MissingDocuments({ profile, onChanged }: { profile: RiderProfile; onChanged: (p: RiderProfile) => void }) {
+  const photoRef = useRef<HTMLInputElement>(null)
+  const [busy, setBusy] = useState<string | null>(null)
+  const missing = profile.missingDocuments ?? []
+  if (missing.length === 0) return null
+
+  async function upload(type: DocType, file: File) {
+    setBusy(type)
+    try {
+      onChanged(await riderProfileService.uploadDocument(profile, type, file))
+    } catch (err) {
+      showErrorToast(err, `Could not upload your ${DOC_LABELS[type]}.`)
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  async function uploadPhoto(e: ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (!file) return
+    setBusy('PHOTO')
+    try {
+      onChanged(await riderProfileService.uploadPhoto(await compressImage(file)))
+    } catch (err) {
+      showErrorToast(err, 'Could not upload your photo.')
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  return (
+    <div className="card mt-5 space-y-4 border-amber-200 p-4 dark:border-amber-500/30">
+      <p className="flex items-start gap-2 text-sm font-semibold text-amber-800 dark:text-amber-300">
+        <AlertTriangle size={16} className="mt-0.5 shrink-0" /> Still needed before we can approve you
+      </p>
+      {missing.map((type) =>
+        type === 'PHOTO' ? (
+          <div key={type}>
+            <button type="button" className="btn-secondary flex w-full items-center justify-center gap-2" disabled={busy === 'PHOTO'} onClick={() => photoRef.current?.click()}>
+              <Camera size={16} /> {busy === 'PHOTO' ? 'Uploading...' : 'Add your photo'}
+            </button>
+            <input ref={photoRef} type="file" accept="image/*" capture="user" className="hidden" onChange={uploadPhoto} />
+          </div>
+        ) : (
+          <DocumentUpload key={type} type={type} file={null} onPick={(file) => upload(type, file)} disabled={busy === type} />
+        ),
+      )}
+    </div>
+  )
+}
 
 function Row({ label, value }: { label: string; value: string | null | undefined }) {
   return (
@@ -36,10 +95,11 @@ export function ApplicationStatusPage({ profile, onChanged, onRefresh }: { profi
             userId={user.id}
             defaultName={profile.name}
             phone={profile.phone || user.phone || ''}
+            phoneVerified={!!(profile.phoneVerified || user.phoneVerified)}
             existing={profile}
             submitLabel="Resubmit application"
-            onSubmit={async (application, licensePhoto, profilePhoto) => {
-              onChanged(await riderProfileService.submitApplication(user.id, application, licensePhoto, true, profilePhoto))
+            onSubmit={async (application, documents, profilePhoto) => {
+              onChanged(await riderProfileService.submitApplication(user.id, application, documents, true, profilePhoto))
               setEditing(false)
             }}
           />
@@ -84,7 +144,25 @@ export function ApplicationStatusPage({ profile, onChanged, onRefresh }: { profi
         <Row label="Vehicle" value={[profile.vehicleType ? VEHICLE_LABEL[profile.vehicleType] : null, profile.vehicleNumber].filter(Boolean).join(' · ')} />
         <Row label="Payout" value={profile.payoutMethod === 'BANK' ? `Bank ${profile.bankAccountNumberMasked ?? ''}` : profile.upiId} />
       </div>
-      {profile.licensePhotoUrl && <img src={profile.licensePhotoUrl} alt="Driving licence" className="mt-3 max-h-40 w-full rounded-xl object-cover" />}
+
+      <MissingDocuments profile={profile} onChanged={onChanged} />
+
+      {(profile.documents?.length ?? 0) > 0 && (
+        <div className="mt-4 grid grid-cols-3 gap-2">
+          {profile.documents!.map((doc) => (
+            <a key={doc.type} href={doc.url} target="_blank" rel="noopener noreferrer" className="block overflow-hidden rounded-xl border border-slate-200 dark:border-slate-800">
+              {doc.contentType === 'application/pdf' ? (
+                <span className="flex h-16 items-center justify-center bg-slate-50 text-brand-600 dark:bg-slate-800">
+                  <FileText size={22} />
+                </span>
+              ) : (
+                <img src={doc.url} alt={doc.label} className="h-16 w-full object-cover" />
+              )}
+              <span className="block truncate px-1.5 py-1 text-[10px] font-medium text-slate-500 dark:text-slate-400">{doc.label}</span>
+            </a>
+          ))}
+        </div>
+      )}
 
       <div className="mt-auto space-y-2 pt-8">
         {rejected ? (

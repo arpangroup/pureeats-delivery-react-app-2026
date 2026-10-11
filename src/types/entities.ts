@@ -17,6 +17,8 @@ export interface User {
   defaultAddressId: number | null
   dob: string | null
   gender: Gender | null
+  /** The phone was verified by OTP (phone sign-in or a verified change) - shown read-only. */
+  phoneVerified?: boolean
 }
 
 export type OrderStatus =
@@ -149,6 +151,18 @@ export interface DeliveryHistoryEntry {
   deliveredAt: string | null
 }
 
+/** A document a delivery partner uploads (a photo or a PDF). */
+export type DocType = 'LICENSE' | 'AADHAAR_FRONT' | 'AADHAAR_BACK' | 'PAN' | 'RC' | 'PASSBOOK'
+
+export interface RiderDocument {
+  type: DocType
+  label: string
+  url: string
+  /** image/... or application/pdf */
+  contentType: string
+  uploadedAt: string
+}
+
 /** The rider's own extended profile - separate from the base `User` identity, fetched once a rider account exists. */
 export interface RiderProfile {
   id: number
@@ -182,6 +196,12 @@ export interface RiderProfile {
   bankAccountHolder?: string | null
   bankAccountNumberMasked?: string | null
   bankIfsc?: string | null
+  /** Latest upload of each document type. */
+  documents?: RiderDocument[]
+  /** Still needed before approval: document types and/or 'PHOTO'. */
+  missingDocuments?: (DocType | 'PHOTO')[]
+  /** The mobile number was verified by OTP. */
+  phoneVerified?: boolean
   upiId?: string | null
 }
 
