@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react'
-import { dropAddress } from '@/lib/customerAddress'
 import { Link, useNavigate } from 'react-router-dom'
 import { Store, MapPin, Navigation, Phone, PackageCheck, Camera, ChefHat, Banknote, StickyNote } from 'lucide-react'
 import { PageHeader } from '@/components/layout/PageHeader'
@@ -224,10 +223,15 @@ export default function ActiveDeliveryPage() {
               <span className="flex h-8 w-8 items-center justify-center rounded-full bg-brand-100 text-brand-600 dark:bg-brand-500/15">
                 <Store size={16} />
               </span>
-              <span className="my-1 h-8 w-px border-l border-dashed border-slate-200 dark:border-slate-700" />
-              <span className="flex h-8 w-8 items-center justify-center rounded-full bg-rose-100 text-rose-600 dark:bg-rose-500/15">
-                <MapPin size={16} />
-              </span>
+              {/* The drop point only once the food is picked up - the server doesn't share the address before that. */}
+              {delivery.customerAddress && (
+                <>
+                  <span className="my-1 h-8 w-px border-l border-dashed border-slate-200 dark:border-slate-700" />
+                  <span className="flex h-8 w-8 items-center justify-center rounded-full bg-rose-100 text-rose-600 dark:bg-rose-500/15">
+                    <MapPin size={16} />
+                  </span>
+                </>
+              )}
             </div>
             <div className="flex-1 space-y-4">
               <div>
@@ -235,11 +239,13 @@ export default function ActiveDeliveryPage() {
                 <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">{delivery.restaurantName}</p>
                 <p className="text-xs text-slate-500 dark:text-slate-400">{delivery.restaurantAddress}</p>
               </div>
-              <div>
-                <p className="text-[11px] font-medium uppercase tracking-wide text-slate-400">Drop</p>
-                <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">{delivery.customerName}</p>
-                <p className={delivery.customerAddress ? 'text-xs text-slate-500 dark:text-slate-400' : 'text-xs italic text-slate-400'}>{dropAddress(delivery.customerAddress)}</p>
-              </div>
+              {delivery.customerAddress && (
+                <div>
+                  <p className="text-[11px] font-medium uppercase tracking-wide text-slate-400">Drop</p>
+                  <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">{delivery.customerName}</p>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">{delivery.customerAddress}</p>
+                </div>
+              )}
             </div>
           </div>
         </div>
