@@ -90,7 +90,7 @@ export function RiderSessionProvider({ children }: { children: ReactNode }) {
 
   const isOnlineRef = useRef(isOnline)
   isOnlineRef.current = isOnline
-  const previousAvailableIds = useRef<Set<number> | null>(null)
+  const previousAvailableIds = useRef<Set<string> | null>(null)
 
   const setIsOnline = useCallback((next: boolean) => {
     setIsOnlineState(next)
@@ -189,8 +189,9 @@ export function RiderSessionProvider({ children }: { children: ReactNode }) {
       const previous = previousAvailableIds.current
       // First poll after (re)starting establishes the baseline silently - only orders that appear
       // on a LATER poll count as "new". IncomingOrderContext additionally de-dupes against push.
-      const freshOnes = previous ? orders.filter((o) => !previous.has(o.id)) : []
-      previousAvailableIds.current = new Set(orders.map((o) => o.id))
+      // Keyed by offer round too: an order offered again (nobody took it) counts as new.
+      const freshOnes = previous ? orders.filter((o) => !previous.has(`${o.id}:${o.offerRound ?? 1}`)) : []
+      previousAvailableIds.current = new Set(orders.map((o) => `${o.id}:${o.offerRound ?? 1}`))
       if (freshOnes.length > 0) {
         const newest = [...freshOnes].sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1))[0]
         showIncomingOrder(newest)

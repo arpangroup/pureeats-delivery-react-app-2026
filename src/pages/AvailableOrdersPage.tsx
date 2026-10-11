@@ -47,6 +47,17 @@ export default function AvailableOrdersPage() {
   // rider comes back instead of showing (and letting them swipe on) a stale one.
   useOnResume(load)
 
+  /** Hidden until the order is offered again (if nobody takes it, it comes back after the re-alert interval). */
+  async function handleDismiss(orderId: number) {
+    setOrders((list) => list?.filter((o) => o.id !== orderId) ?? null)
+    try {
+      await deliveryOrderService.dismiss(orderId)
+    } catch (err) {
+      showErrorToast(err)
+      load()
+    }
+  }
+
   async function handleAccept(orderId: number) {
     setAcceptingId(orderId)
     setAcceptError(null)
@@ -108,6 +119,9 @@ export default function AvailableOrdersPage() {
                 onAccept={() => handleAccept(order.id)}
                 disabled={acceptingId !== null}
               />
+              <button type="button" className="mt-2 w-full py-1.5 text-center text-xs font-medium text-slate-400" onClick={() => handleDismiss(order.id)} disabled={acceptingId !== null}>
+                Not interested - hide this order
+              </button>
             </div>
           </div>
         ))}

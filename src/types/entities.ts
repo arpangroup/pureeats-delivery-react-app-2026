@@ -72,6 +72,8 @@ export interface AvailableOrder {
   paymentMode?: string | null
   /** When the food should be ready (acceptance + prep time) - drives the pickup countdown. */
   pickupDueAt?: string | null
+  /** 1 = first offer; higher when the order is offered again because nobody took it - it alerts again. */
+  offerRound?: number
 }
 
 export interface ActiveDeliveryItem {
@@ -101,10 +103,11 @@ export interface ActiveDelivery {
   restaurantLng: number
   restaurantContactNumber: string
   customerName: string
-  customerAddress: string
-  customerLat: number
-  customerLng: number
-  customerPhone: string
+  /** The customer's address, location and phone arrive only once the food is picked up - null before that. */
+  customerAddress: string | null
+  customerLat: number | null
+  customerLng: number | null
+  customerPhone: string | null
   items: ActiveDeliveryItem[]
   payoutEstimate: number
   distanceKm: number

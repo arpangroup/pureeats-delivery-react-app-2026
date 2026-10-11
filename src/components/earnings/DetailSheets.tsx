@@ -1,4 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react'
+import { useDriverSettings } from '@/hooks/useDriverSettings'
 import { X, Store, MapPin, CheckCircle2, Clock, Banknote, ArrowDownLeft, ArrowUpRight } from 'lucide-react'
 import { earningsService } from '@/services/earningsService'
 import { formatCurrency, formatDate } from '@/lib/format'
@@ -68,6 +69,8 @@ const basisLabel = (basis: string | null) => (basis === 'DELIVERY_CHARGE_ONLY' ?
 
 /** Earning breakdown for one delivered order. */
 export function EarningDetailSheet({ orderId, onClose, onOpenSettlement }: { orderId: number; onClose: () => void; onOpenSettlement?: (id: number) => void }) {
+  // Settings -> Delivery Application -> Wallet: the commission % and what it applies to are hidden by default.
+  const { showEarningBreakdown } = useDriverSettings()
   const [earning, setEarning] = useState<RiderEarning | null>(null)
   const [failed, setFailed] = useState(false)
 
@@ -111,11 +114,11 @@ export function EarningDetailSheet({ orderId, onClose, onOpenSettlement }: { ord
             )}
           </div>
 
-          <p className="mb-1 mt-5 text-xs font-semibold uppercase tracking-wide text-slate-400">How it was calculated</p>
+          <p className="mb-1 mt-5 text-xs font-semibold uppercase tracking-wide text-slate-400">{showEarningBreakdown ? 'How it was calculated' : 'Details'}</p>
           <div className="divide-y divide-slate-100 dark:divide-slate-800">
-            {earning.orderTotal != null && <Row label="Order total" value={formatCurrency(earning.orderTotal)} />}
-            {earning.deliveryCharge != null && <Row label="Delivery charge" value={formatCurrency(earning.deliveryCharge)} />}
-            {earning.commissionRate != null && (
+            {showEarningBreakdown && earning.orderTotal != null && <Row label="Order total" value={formatCurrency(earning.orderTotal)} />}
+            {showEarningBreakdown && earning.deliveryCharge != null && <Row label="Delivery charge" value={formatCurrency(earning.deliveryCharge)} />}
+            {showEarningBreakdown && earning.commissionRate != null && (
               <Row
                 label={`Your commission (${earning.commissionRate}% of ${basisLabel(earning.commissionBasis)})`}
                 value={earning.commissionBase != null ? `${earning.commissionRate}% × ${formatCurrency(earning.commissionBase)}` : `${earning.commissionRate}%`}

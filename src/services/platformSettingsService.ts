@@ -11,6 +11,8 @@ export interface PlatformSettings {
   orderAlertSoundUrl: string | null
   /** Settings -> Delivery Application -> Order screens: show the partner's payout on order screens (off by default). */
   showPayout: boolean
+  /** Settings -> Delivery Application -> Wallet: show how each earning was calculated - commission %, what it applies to (off by default). */
+  showEarningBreakdown: boolean
   /** Settings -> Delivery Application -> Profile editing: which profile fields the partner may change (all off by default). */
   profileEditable: Record<ProfileField, boolean>
 }
@@ -41,7 +43,7 @@ const LOCKED: Record<ProfileField, boolean> = {
   payout: false,
 }
 
-const DEFAULTS: PlatformSettings = { locationTrackingEnabled: true, orderAlertSoundUrl: null, showPayout: false, profileEditable: LOCKED }
+const DEFAULTS: PlatformSettings = { locationTrackingEnabled: true, orderAlertSoundUrl: null, showPayout: false, showEarningBreakdown: false, profileEditable: LOCKED }
 
 /** Mock mode: payout shown and the profile editable so every screen can be demoed. */
 const MOCK_SETTINGS: PlatformSettings = {
@@ -81,6 +83,7 @@ export const platformSettingsService = {
         locationTrackingEnabled: tracking == null || tracking === 'true',
         orderAlertSoundUrl: sound && sound.trim() ? sound.trim() : null,
         showPayout: flags.driver_show_payout === 'true',
+        showEarningBreakdown: flags.driver_show_earning_breakdown === 'true',
         profileEditable: Object.fromEntries(
           (Object.keys(PROFILE_KEYS) as ProfileField[]).map((f) => [f, flags[PROFILE_KEYS[f]] === 'true']),
         ) as Record<ProfileField, boolean>,

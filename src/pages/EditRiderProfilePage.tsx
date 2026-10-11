@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ChangeEvent, type FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Camera, Check, Loader2, Lock } from 'lucide-react'
+import { Camera, Check, Loader2, Lock, X } from 'lucide-react'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Field, TextInput } from '@/components/ui/FormControls'
 import { useAuth } from '@/hooks/useAuth'
@@ -171,10 +171,11 @@ export default function EditRiderProfilePage() {
   const [email, setEmail] = useState('')
   const [photo, setPhoto] = useState<string | null>(null)
   const [photoFile, setPhotoFile] = useState<File | null>(null)
+  const [viewingPhoto, setViewingPhoto] = useState(false)
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const { profileEditable: can } = useDriverSettings()
+  const { profileEditable: can, showEarningBreakdown } = useDriverSettings()
   const anyEditable = can.name || can.vehicleNumber
   // The photo is locked once approved (customers recognise the partner by it) unless an admin unlocks it;
   // an applicant still waiting for approval can always change it.
@@ -245,12 +246,27 @@ export default function EditRiderProfilePage() {
   return (
     <div>
       <PageHeader title="Edit profile" />
+      {viewingPhoto && photo && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 p-4" role="dialog" aria-modal="true" aria-label="Your photo" onClick={() => setViewingPhoto(false)}>
+          <button type="button" onClick={() => setViewingPhoto(false)} className="absolute right-4 top-4 rounded-full bg-white/15 p-2 text-white" aria-label="Close">
+            <X size={20} />
+          </button>
+          <img src={photo} alt={name} className="max-h-[85vh] max-w-full rounded-2xl object-contain" onClick={(e) => e.stopPropagation()} />
+        </div>
+      )}
       <div className="px-4 py-4 pb-8">
         <div className="flex flex-col items-center gap-3 py-2">
           <div className="relative">
-            <span className="flex h-20 w-20 items-center justify-center overflow-hidden rounded-full bg-brand-100 text-xl font-semibold text-brand-700 dark:bg-brand-500/15 dark:text-brand-400">
-              {photo ? <img src={photo} alt={name} className="h-full w-full object-cover" /> : initials(name || user.name)}
-            </span>
+            {photo ? (
+              // Tap to see the photo full size.
+              <button type="button" onClick={() => setViewingPhoto(true)} className="block h-20 w-20 overflow-hidden rounded-full" aria-label="View photo">
+                <img src={photo} alt={name} className="h-full w-full object-cover" />
+              </button>
+            ) : (
+              <span className="flex h-20 w-20 items-center justify-center overflow-hidden rounded-full bg-brand-100 text-xl font-semibold text-brand-700 dark:bg-brand-500/15 dark:text-brand-400">
+                {initials(name || user.name)}
+              </span>
+            )}
             {photoEditable ? (
               <>
                 <button
@@ -312,15 +328,17 @@ export default function EditRiderProfilePage() {
         </form>
 
         {profile && (
-          <div className="card mt-4 grid grid-cols-2 divide-x divide-slate-100 dark:divide-slate-800">
+          <div className={`card mt-4 grid divide-x divide-slate-100 dark:divide-slate-800 ${showEarningBreakdown ? 'grid-cols-2' : 'grid-cols-1'}`}>
             <div className="p-3 text-center">
               <p className="text-sm font-bold text-slate-800 dark:text-slate-100">{profile.rating.toFixed(1)}</p>
               <p className="text-[11px] text-slate-400">Rating</p>
             </div>
-            <div className="p-3 text-center">
-              <p className="text-sm font-bold text-slate-800 dark:text-slate-100">{profile.commissionRate > 0 ? `${profile.commissionRate}%` : 'Standard'}</p>
-              <p className="text-[11px] text-slate-400">Commission</p>
-            </div>
+            {showEarningBreakdown && (
+              <div className="p-3 text-center">
+                <p className="text-sm font-bold text-slate-800 dark:text-slate-100">{profile.commissionRate > 0 ? `${profile.commissionRate}%` : 'Standard'}</p>
+                <p className="text-[11px] text-slate-400">Commission</p>
+              </div>
+            )}
           </div>
         )}
 

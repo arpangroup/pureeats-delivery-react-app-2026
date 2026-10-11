@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { dropAddress } from '@/lib/customerAddress'
 import { Link, useNavigate } from 'react-router-dom'
 import { Store, MapPin, Navigation, Phone, PackageCheck, Camera, ChefHat, Banknote, StickyNote } from 'lucide-react'
 import { PageHeader } from '@/components/layout/PageHeader'
@@ -237,7 +238,7 @@ export default function ActiveDeliveryPage() {
               <div>
                 <p className="text-[11px] font-medium uppercase tracking-wide text-slate-400">Drop</p>
                 <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">{delivery.customerName}</p>
-                <p className="text-xs text-slate-500 dark:text-slate-400">{delivery.customerAddress}</p>
+                <p className={delivery.customerAddress ? 'text-xs text-slate-500 dark:text-slate-400' : 'text-xs italic text-slate-400'}>{dropAddress(delivery.customerAddress)}</p>
               </div>
             </div>
           </div>
@@ -245,7 +246,7 @@ export default function ActiveDeliveryPage() {
 
         <div className="grid grid-cols-2 gap-3">
           <a
-            href={isHeadingToRestaurant ? mapsUrl(delivery.restaurantLat, delivery.restaurantLng) : mapsUrl(delivery.customerLat, delivery.customerLng)}
+            href={isHeadingToRestaurant || delivery.customerLat == null || delivery.customerLng == null ? mapsUrl(delivery.restaurantLat, delivery.restaurantLng) : mapsUrl(delivery.customerLat, delivery.customerLng)}
             target="_blank"
             rel="noreferrer"
             className="btn-secondary flex items-center justify-center gap-2"
@@ -253,7 +254,7 @@ export default function ActiveDeliveryPage() {
             <Navigation size={16} /> {isHeadingToRestaurant ? 'Go to restaurant' : 'Go to customer'}
           </a>
           <a
-            href={`tel:${isHeadingToRestaurant ? delivery.restaurantContactNumber : delivery.customerPhone}`}
+            href={`tel:${isHeadingToRestaurant || !delivery.customerPhone ? delivery.restaurantContactNumber : delivery.customerPhone}`}
             className="btn-secondary flex items-center justify-center gap-2"
           >
             <Phone size={16} /> Call

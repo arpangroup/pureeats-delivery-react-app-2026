@@ -108,16 +108,29 @@ export function paymentLabel(mode: string | null | undefined): 'COD' | 'Prepaid'
 
 export const MAX_PICKUP_PHOTOS = 3
 
+/** Mock mode: orders dismissed this session. */
+const mockDismissed = new Set<number>()
+
 export const deliveryOrderService = {
   async listAvailable(): Promise<AvailableOrder[]> {
     if (IS_MOCK) {
       await mockDelay(200)
       purgeStale()
       maybeAdmitNewOrder()
-      return [...visibleOrders].sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1))
+      return [...visibleOrders].filter((o) => !mockDismissed.has(o.id)).sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1))
     }
     const { data } = await apiClient.get<{ data: AvailableOrder[] }>('/delivery/orders/available')
     return (data.data ?? []).map(normalizeAvailable)
+  },
+
+  /** Not interested: the order disappears from this partner's available orders until it's offered again. */
+  async dismiss(orderId: number): Promise<void> {
+    if (IS_MOCK) {
+      await mockDelay(100)
+      mockDismissed.add(orderId)
+      return
+    }
+    await apiClient.post(`/delivery/orders/${orderId}/dismiss`)
   },
 
   async accept(orderId: number): Promise<ActiveDelivery> {
@@ -287,7 +300,7 @@ export const deliveryOrderService = {
         uniqueOrderId: delivered.uniqueOrderId,
         status: 'DELIVERED',
         restaurantName: delivered.restaurantName,
-        customerAddress: delivered.customerAddress,
+        customerAddress: delivered.customerAddress ?? '',
         payoutEstimate: delivered.payoutEstimate,
         distanceKm: delivered.distanceKm,
         createdAt: delivered.createdAt,

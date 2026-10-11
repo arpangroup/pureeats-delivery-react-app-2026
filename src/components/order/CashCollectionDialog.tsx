@@ -82,8 +82,10 @@ export function CashCollectionDialog({ due, initial, onConfirm, onClose }: { due
             <TextInput
               id="cash-amount"
               value={amount}
-              onChange={(e) => setAmount(e.target.value.replace(/[^\d.]/g, ''))}
-              inputMode="decimal"
+              // Whole rupees, at most 4 digits (up to 9999).
+              onChange={(e) => setAmount(e.target.value.replace(/\D/g, '').slice(0, 4))}
+              inputMode="numeric"
+              maxLength={4}
               placeholder={`e.g. ${Math.ceil(due / 100) * 100 || 500}`}
               className="mt-1 text-lg font-semibold"
               autoFocus

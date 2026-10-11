@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { dropAddress } from '@/lib/customerAddress'
 import { Link } from 'react-router-dom'
 import { Power, ListChecks, Bike, Wallet as WalletIcon, Star, Wrench, AlertTriangle, X, History } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
@@ -139,7 +140,7 @@ export default function HomePage() {
             {activeDelivery.assignedBy === 'ADMIN' && ' - assigned by admin'}
           </p>
           <p className="mt-1 text-sm font-medium text-slate-800 dark:text-slate-100">
-            {activeDelivery.restaurantName} &rarr; {activeDelivery.customerAddress}
+            {activeDelivery.restaurantName}{activeDelivery.customerAddress ? <> &rarr; {activeDelivery.customerAddress}</> : null}
           </p>
           <Link to="/deliveries/active" className="btn-primary mt-3 inline-flex">
             Continue delivery

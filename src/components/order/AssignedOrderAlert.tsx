@@ -1,4 +1,5 @@
 import { useNavigate } from 'react-router-dom'
+import { dropAddress } from '@/lib/customerAddress'
 import { MapPin, Store, ShieldCheck } from 'lucide-react'
 import { useRiderSession } from '@/context/RiderSessionContext'
 import { formatCurrency } from '@/lib/format'
@@ -51,7 +52,7 @@ export function AssignedOrderAlert() {
           </div>
           <div className="flex gap-2">
             <MapPin size={16} className="mt-0.5 shrink-0 text-rose-500" />
-            <p className="min-w-0 truncate text-xs text-slate-600 dark:text-slate-300">{assignedAlert.customerAddress}</p>
+            <p className="min-w-0 truncate text-xs text-slate-600 dark:text-slate-300">{dropAddress(assignedAlert.customerAddress)}</p>
           </div>
           {showPayout && (
             <div className="flex justify-between text-sm">

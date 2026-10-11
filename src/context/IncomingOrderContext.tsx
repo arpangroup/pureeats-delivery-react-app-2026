@@ -13,6 +13,11 @@ interface IncomingOrderContextValue {
   clearIncomingOrder: () => void
 }
 
+/** One offer of one order - the same order offered again is a different key. */
+function offerKey(order: Pick<AvailableOrder, 'id' | 'offerRound'>): string {
+  return `${order.id}:${order.offerRound ?? 1}`
+}
+
 const IncomingOrderContext = createContext<IncomingOrderContextValue | undefined>(undefined)
 
 /**
@@ -22,17 +27,19 @@ const IncomingOrderContext = createContext<IncomingOrderContextValue | undefined
  * outside routing) is the only reader.
  *
  * Because push and polling now BOTH run (push alone misses everything that arrives while the app
- * is backgrounded), an order id is only ever alerted once per session - whichever path sees it
- * first wins, the other is ignored.
+ * is backgrounded), each offer of an order is alerted once per session - whichever path sees it first
+ * wins, the other is ignored. An order nobody took is offered again by the server (a new `offerRound`),
+ * which alerts again.
  */
 export function IncomingOrderProvider({ children }: { children: ReactNode }) {
   const [incomingOrder, setIncomingOrder] = useState<AvailableOrder | null>(null)
   const [shownAt, setShownAt] = useState<number | null>(null)
-  const alertedIds = useRef<Set<number>>(new Set())
+  const alertedIds = useRef<Set<string>>(new Set())
 
   const showIncomingOrder = useCallback((order: AvailableOrder) => {
-    if (alertedIds.current.has(order.id)) return
-    alertedIds.current.add(order.id)
+    const key = offerKey(order)
+    if (alertedIds.current.has(key)) return
+    alertedIds.current.add(key)
     // Only ever one at a time - a second alert arriving while one is already showing just replaces
     // it with whichever is newest, it never stacks.
     setIncomingOrder(order)
