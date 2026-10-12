@@ -17,8 +17,11 @@ import { showErrorToast } from '@/lib/errorToast'
 
 /** Deep-links out to the phone's own maps app instead of embedding a map - this app has no
  * @react-google-maps/api dependency. */
-function mapsUrl(lat: number, lng: number): string {
-  return `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`
+function mapsUrl(lat: number, lng: number, from?: { latitude: number; longitude: number } | null): string {
+  // Start from the partner's own current position: with no origin, Google Maps can reuse the last route's start
+  // (e.g. the previous customer's address) instead of where the partner is. dir_action=navigate opens turn-by-turn.
+  const origin = from ? `&origin=${from.latitude},${from.longitude}` : ''
+  return `https://www.google.com/maps/dir/?api=1${origin}&destination=${lat},${lng}&travelmode=driving&dir_action=navigate`
 }
 
 /** Statuses after the food has left the restaurant. */
@@ -28,7 +31,7 @@ const READY_POLL_MS = 5000
 
 export default function ActiveDeliveryPage() {
   const navigate = useNavigate()
-  const { activeDeliveries, refreshActiveDeliveries } = useRiderSession()
+  const { activeDeliveries, refreshActiveDeliveries, lastPosition } = useRiderSession()
   const { showPayout } = useDriverSettings()
   const [selectedId, setSelectedId] = useState<number | null>(null)
   /** Local copy of the delivery being worked - kept after completion so the "Delivered!" screen can show, even though it has left activeDeliveries. */
@@ -252,7 +255,11 @@ export default function ActiveDeliveryPage() {
 
         <div className="grid grid-cols-2 gap-3">
           <a
-            href={isHeadingToRestaurant || delivery.customerLat == null || delivery.customerLng == null ? mapsUrl(delivery.restaurantLat, delivery.restaurantLng) : mapsUrl(delivery.customerLat, delivery.customerLng)}
+            href={
+              isHeadingToRestaurant || delivery.customerLat == null || delivery.customerLng == null
+                ? mapsUrl(delivery.restaurantLat, delivery.restaurantLng, lastPosition)
+                : mapsUrl(delivery.customerLat, delivery.customerLng, lastPosition)
+            }
             target="_blank"
             rel="noreferrer"
             className="btn-secondary flex items-center justify-center gap-2"
