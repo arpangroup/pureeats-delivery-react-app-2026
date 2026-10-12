@@ -1,14 +1,15 @@
 import { useEffect, useRef, useState, type ChangeEvent, type FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Camera, Check, Loader2, Lock } from 'lucide-react'
+import { Camera, Check, Loader2, Lock, X } from 'lucide-react'
 import { PageHeader } from '@/components/layout/PageHeader'
-import { Field, TextInput, Textarea } from '@/components/ui/FormControls'
+import { Field, TextInput } from '@/components/ui/FormControls'
 import { useAuth } from '@/hooks/useAuth'
 import { riderProfileService } from '@/services/riderProfileService'
 import { userService } from '@/services/userService'
 import { initials } from '@/lib/format'
 import { IS_MOCK } from '@/config/env'
-import type { Gender, RiderProfile } from '@/types/entities'
+import type { RiderProfile } from '@/types/entities'
+import { displayEmail } from '@/lib/contact'
 import { showErrorToast } from '@/lib/errorToast'
 import { useDriverSettings } from '@/hooks/useDriverSettings'
 import { PartnerDocumentsCard } from '@/components/onboarding/PartnerDocumentsCard'
@@ -166,18 +167,19 @@ export default function EditRiderProfilePage() {
   const [profile, setProfile] = useState<RiderProfile | null>(null)
   const [name, setName] = useState('')
   const [vehicleNumber, setVehicleNumber] = useState('')
-  const [age, setAge] = useState('')
-  const [gender, setGender] = useState<Gender | ''>('')
-  const [description, setDescription] = useState('')
   const [phone, setPhone] = useState('')
   const [email, setEmail] = useState('')
   const [photo, setPhoto] = useState<string | null>(null)
   const [photoFile, setPhotoFile] = useState<File | null>(null)
+  const [viewingPhoto, setViewingPhoto] = useState(false)
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const { profileEditable: can } = useDriverSettings()
-  const anyEditable = can.name || can.vehicleNumber || can.age || can.gender || can.about
+  const { profileEditable: can, showEarningBreakdown } = useDriverSettings()
+  const anyEditable = can.name || can.vehicleNumber
+  // The photo is locked once approved (customers recognise the partner by it) unless an admin unlocks it;
+  // an applicant still waiting for approval can always change it.
+  const photoEditable = !profile || profile.approvalStatus !== 'APPROVED' || can.photo
 
   useEffect(() => {
     if (!user) return
@@ -189,13 +191,11 @@ export default function EditRiderProfilePage() {
       setProfile(p)
       setName(p?.name ?? user.name)
       setVehicleNumber(p?.vehicleNumber ?? '')
-      setAge(p?.age != null ? String(p.age) : '')
-      setGender(p?.gender ?? '')
-      setDescription(p?.description ?? '')
       setPhoto(p?.photo ?? null)
       // The token's copy can be empty for older sign-ins - prefer the profile's.
       setPhone(p?.phone || user.phone || '')
-      setEmail(p?.email || user.email || '')
+      // A phone sign-up's internal placeholder email is never shown.
+      setEmail(displayEmail(p?.email) || displayEmail(user.email))
     })
       .catch((err) => {
         if (!cancelled) showErrorToast(err, 'Could not load your profile.')
@@ -226,9 +226,9 @@ export default function EditRiderProfilePage() {
       const updated = await riderProfileService.updateProfile(user!.id, {
         name: name.trim(),
         vehicleNumber: vehicleNumber.trim(),
-        age: age ? Number(age) : null,
-        gender: gender || null,
-        description: description.trim(),
+        age: profile?.age ?? null,
+        gender: profile?.gender ?? null,
+        description: profile?.description ?? '',
         photo: photoFile,
       })
       setProfile(updated)
@@ -246,28 +246,52 @@ export default function EditRiderProfilePage() {
   return (
     <div>
       <PageHeader title="Edit profile" />
+      {viewingPhoto && photo && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 p-4" role="dialog" aria-modal="true" aria-label="Your photo" onClick={() => setViewingPhoto(false)}>
+          <button type="button" onClick={() => setViewingPhoto(false)} className="absolute right-4 top-4 rounded-full bg-white/15 p-2 text-white" aria-label="Close">
+            <X size={20} />
+          </button>
+          <img src={photo} alt={name} className="max-h-[85vh] max-w-full rounded-2xl object-contain" onClick={(e) => e.stopPropagation()} />
+        </div>
+      )}
       <div className="px-4 py-4 pb-8">
         <div className="flex flex-col items-center gap-3 py-2">
           <div className="relative">
-            <span className="flex h-20 w-20 items-center justify-center overflow-hidden rounded-full bg-brand-100 text-xl font-semibold text-brand-700 dark:bg-brand-500/15 dark:text-brand-400">
-              {photo ? <img src={photo} alt={name} className="h-full w-full object-cover" /> : initials(name || user.name)}
-            </span>
-            <button
-              type="button"
-              onClick={() => fileInputRef.current?.click()}
-              className="absolute -bottom-1 -right-1 flex h-8 w-8 items-center justify-center rounded-full bg-brand-600 text-white shadow-sm"
-              aria-label="Change photo"
-            >
-              <Camera size={14} />
-            </button>
-            <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handlePhotoSelected} />
+            {photo ? (
+              // Tap to see the photo full size.
+              <button type="button" onClick={() => setViewingPhoto(true)} className="block h-20 w-20 overflow-hidden rounded-full" aria-label="View photo">
+                <img src={photo} alt={name} className="h-full w-full object-cover" />
+              </button>
+            ) : (
+              <span className="flex h-20 w-20 items-center justify-center overflow-hidden rounded-full bg-brand-100 text-xl font-semibold text-brand-700 dark:bg-brand-500/15 dark:text-brand-400">
+                {initials(name || user.name)}
+              </span>
+            )}
+            {photoEditable ? (
+              <>
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="absolute -bottom-1 -right-1 flex h-8 w-8 items-center justify-center rounded-full bg-brand-600 text-white shadow-sm"
+                  aria-label="Change photo"
+                >
+                  <Camera size={14} />
+                </button>
+                <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handlePhotoSelected} />
+              </>
+            ) : (
+              <span className="absolute -bottom-1 -right-1 flex h-8 w-8 items-center justify-center rounded-full bg-slate-200 text-slate-500 shadow-sm dark:bg-slate-700" title="Your photo is locked">
+                <Lock size={13} />
+              </span>
+            )}
           </div>
+          {!photoEditable && <p className="text-[11px] text-slate-400">Photo locked - contact support to change it.</p>}
         </div>
 
         <form onSubmit={handleSave} className="card mt-2 space-y-4 p-4">
           {!anyEditable && (
             <p className="flex items-start gap-2 rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-500 dark:bg-slate-800/60 dark:text-slate-400">
-              <Lock size={14} className="mt-0.5 shrink-0" /> These details are managed by PureEats. Contact support to change them - you can still update your photo.
+              <Lock size={14} className="mt-0.5 shrink-0" /> These details are managed by PureEats. Contact support to change them{photoEditable ? ' - you can still update your photo.' : '.'}
             </p>
           )}
           <Field label="Name" required>
@@ -283,29 +307,13 @@ export default function EditRiderProfilePage() {
               disabled={!can.vehicleNumber}
             />
           </Field>
-          <div className="grid grid-cols-2 gap-3">
-            <Field label="Age">
-              <TextInput type="number" min={18} max={70} value={age} onChange={(e) => setAge(e.target.value)} readOnly={!can.age} disabled={!can.age} />
-            </Field>
-            <Field label="Gender">
-              <select className="input disabled:opacity-60" value={gender} onChange={(e) => setGender(e.target.value as Gender | '')} disabled={!can.gender}>
-                <option value="">Prefer not to say</option>
-                <option value="MALE">Male</option>
-                <option value="FEMALE">Female</option>
-                <option value="OTHER">Other</option>
-              </select>
-            </Field>
-          </div>
-          <Field label="About you">
-            <Textarea value={description} onChange={(e) => setDescription(e.target.value)} readOnly={!can.about} disabled={!can.about} />
-          </Field>
 
           {error && <p className="rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-600 dark:bg-rose-500/10 dark:text-rose-400">{error}</p>}
 
           <button
             type="submit"
             className="btn-primary flex w-full items-center justify-center gap-2"
-            disabled={saving || !name.trim() || !vehicleNumber.trim() || (!anyEditable && !photoFile)}
+            disabled={saving || !name.trim() || (profile?.vehicleType !== 'CYCLE' && !vehicleNumber.trim()) || (!anyEditable && !photoFile)}
           >
             {saving ? (
               'Saving...'
@@ -320,15 +328,17 @@ export default function EditRiderProfilePage() {
         </form>
 
         {profile && (
-          <div className="card mt-4 grid grid-cols-2 divide-x divide-slate-100 dark:divide-slate-800">
+          <div className={`card mt-4 grid divide-x divide-slate-100 dark:divide-slate-800 ${showEarningBreakdown ? 'grid-cols-2' : 'grid-cols-1'}`}>
             <div className="p-3 text-center">
               <p className="text-sm font-bold text-slate-800 dark:text-slate-100">{profile.rating.toFixed(1)}</p>
               <p className="text-[11px] text-slate-400">Rating</p>
             </div>
-            <div className="p-3 text-center">
-              <p className="text-sm font-bold text-slate-800 dark:text-slate-100">{profile.commissionRate > 0 ? `${profile.commissionRate}%` : 'Standard'}</p>
-              <p className="text-[11px] text-slate-400">Commission</p>
-            </div>
+            {showEarningBreakdown && (
+              <div className="p-3 text-center">
+                <p className="text-sm font-bold text-slate-800 dark:text-slate-100">{profile.commissionRate > 0 ? `${profile.commissionRate}%` : 'Standard'}</p>
+                <p className="text-[11px] text-slate-400">Commission</p>
+              </div>
+            )}
           </div>
         )}
 

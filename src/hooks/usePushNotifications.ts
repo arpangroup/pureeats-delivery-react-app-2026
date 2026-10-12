@@ -87,13 +87,15 @@ export function usePushNotifications() {
         showIncomingOrder(parsed)
         return
       }
-      // Payload didn't carry enough to build a full order - fetch fresh and show whatever's newest.
+      // Payload didn't carry enough to build a full order - fetch fresh and show that order (else the newest).
+      const pushedId = Number(payload.data?.orderId)
       deliveryOrderService
         .listAvailable()
         .then((orders) => {
           if (cancelled || orders.length === 0) return
+          const pushed = orders.find((o) => o.id === pushedId)
           const newest = [...orders].sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1))[0]
-          showIncomingOrder(newest)
+          showIncomingOrder(pushed ?? newest)
         })
         .catch(() => undefined)
     })

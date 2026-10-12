@@ -41,8 +41,30 @@ const AuthContext = createContext<AuthContextValue | undefined>(undefined)
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(() => readStorage<User | null>(AUTH_USER_STORAGE_KEY, null))
 
+  /**
+   * The account as the server has it now (name, phone, email, photo, phone verified) - the token's claims are a
+   * snapshot from sign-in, so a number verified or changed later showed differently on different screens. The
+   * role stays the token's: the DELIVERY role only exists in a fresh token.
+   */
+  const applyServerUser = useCallback((fresh: Partial<User> & { id: number }) => {
+    setUser((current) => {
+      if (!current || current.id !== fresh.id) return current
+      const next: User = {
+        ...current,
+        name: fresh.name ?? current.name,
+        email: fresh.email ?? current.email,
+        phone: fresh.phone ?? '',
+        photo: fresh.photo ?? current.photo,
+        phoneVerified: !!fresh.phoneVerified,
+      }
+      writeStorage(AUTH_USER_STORAGE_KEY, next)
+      return next
+    })
+  }, [])
+
   // On open and whenever the app returns to the foreground, touch an authenticated endpoint: a user an
-  // admin blocked meanwhile gets ACCOUNT_BLOCKED and apiClient signs them out (see lib/sessionEnd).
+  // admin blocked meanwhile gets ACCOUNT_BLOCKED and apiClient signs them out (see lib/sessionEnd). The
+  // answer also refreshes the stored user (see applyServerUser).
   const signedInUserId = user?.id ?? null
   useEffect(() => {
     if (IS_MOCK || signedInUserId == null) return
@@ -50,12 +72,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const check = () => {
       if (document.visibilityState !== 'visible' || Date.now() - last < 30_000) return
       last = Date.now()
-      apiClient.get('/users/me').catch(() => undefined)
+      apiClient
+        .get<{ data: User }>('/users/me')
+        .then(({ data }) => applyServerUser(data.data))
+        .catch(() => undefined)
     }
     check()
     document.addEventListener('visibilitychange', check)
     return () => document.removeEventListener('visibilitychange', check)
-  }, [signedInUserId])
+  }, [signedInUserId, applyServerUser])
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -146,13 +171,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null)
   }, [])
 
+  /** Re-reads the account from the server - after verifying a number, or anything else that changes it. */
   const refreshUser = useCallback(async () => {
-    if (!user) return
-    // No dedicated GET /users/me round-trip here (unlike the customer app) - this app's `user`
-    // is always fresh off the JWT claims, and profile edits live on RiderProfile (see
-    // riderProfileService), not on the base User identity. Kept as a no-op-shaped async function so
-    // callers (e.g. after a name change) can still `await refreshUser()` uniformly.
-  }, [user])
+    if (!user || IS_MOCK) return
+    try {
+      const { data } = await apiClient.get<{ data: User }>('/users/me')
+      applyServerUser(data.data)
+    } catch {
+      // Best-effort - the stored copy stays as it was.
+    }
+  }, [user, applyServerUser])
 
   const value = useMemo<AuthContextValue>(
     () => ({

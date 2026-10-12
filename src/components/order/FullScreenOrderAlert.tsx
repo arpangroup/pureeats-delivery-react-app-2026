@@ -160,7 +160,11 @@ export function FullScreenOrderAlert() {
         <button
           type="button"
           className="mt-3 w-full py-2 text-center text-sm font-medium text-white/50"
-          onClick={clearIncomingOrder}
+          onClick={() => {
+            // Not interested: hide it from this partner's available orders until it's offered again.
+            deliveryOrderService.dismiss(incomingOrder.id, incomingOrder.offerRound).catch((err) => showErrorToast(err, 'Could not dismiss this order.'))
+            clearIncomingOrder()
+          }}
           disabled={accepting}
         >
           Dismiss

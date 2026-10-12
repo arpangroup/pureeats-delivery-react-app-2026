@@ -49,10 +49,12 @@ export function AssignedOrderAlert() {
               <p className="truncate text-xs text-slate-500 dark:text-slate-400">{assignedAlert.restaurantAddress}</p>
             </div>
           </div>
-          <div className="flex gap-2">
-            <MapPin size={16} className="mt-0.5 shrink-0 text-rose-500" />
-            <p className="min-w-0 truncate text-xs text-slate-600 dark:text-slate-300">{assignedAlert.customerAddress}</p>
-          </div>
+          {assignedAlert.customerAddress && (
+            <div className="flex gap-2">
+              <MapPin size={16} className="mt-0.5 shrink-0 text-rose-500" />
+              <p className="min-w-0 truncate text-xs text-slate-600 dark:text-slate-300">{assignedAlert.customerAddress}</p>
+            </div>
+          )}
           {showPayout && (
             <div className="flex justify-between text-sm">
               <span className="text-slate-500 dark:text-slate-400">Your payout</span>

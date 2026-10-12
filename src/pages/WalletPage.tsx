@@ -169,7 +169,7 @@ export default function WalletPage() {
             <p className="mt-2 text-xs text-white/75">
               {summary && (summary.pendingWithdrawals ?? 0) > 0
                 ? `${formatCurrency(summary.pendingWithdrawals ?? 0)} withdrawal requested - waiting to be paid. Available: ${formatCurrency(summary.availableToWithdraw ?? 0)}.`
-                : 'Commission + tips from your deliveries. Withdraw any time, or the platform pays it out to your bank/UPI.'}
+                : 'Earnings + tips from your deliveries. Withdraw any time, or the platform pays it out to your bank/UPI.'}
             </p>
           </div>
         </div>

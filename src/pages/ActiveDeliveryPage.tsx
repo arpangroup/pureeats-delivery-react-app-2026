@@ -7,6 +7,7 @@ import { TextInput } from '@/components/ui/FormControls'
 import { SwipeToAcceptButton } from '@/components/ui/SwipeToAcceptButton'
 import { OrderIdTag, OrderStatusBadge, PaymentBadge, PickupCountdown } from '@/components/order/OrderMeta'
 import { DeliveryTimingPanel } from '@/components/order/DeliveryTimingPanel'
+import { CashCollectionDialog } from '@/components/order/CashCollectionDialog'
 import { deliveryOrderService, MAX_PICKUP_PHOTOS, paymentLabel } from '@/services/deliveryOrderService'
 import { useRiderSession } from '@/context/RiderSessionContext'
 import { useDriverSettings } from '@/hooks/useDriverSettings'
@@ -33,6 +34,9 @@ export default function ActiveDeliveryPage() {
   /** Local copy of the delivery being worked - kept after completion so the "Delivered!" screen can show, even though it has left activeDeliveries. */
   const [completed, setCompleted] = useState<ActiveDelivery | null>(null)
   const [pin, setPin] = useState('')
+  /** Cash on delivery: what the partner confirmed collecting, per order (null until confirmed). */
+  const [cash, setCash] = useState<{ orderId: number; amount: number } | null>(null)
+  const [cashDialog, setCashDialog] = useState<{ orderId: number; open: boolean } | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -70,9 +74,11 @@ export default function ActiveDeliveryPage() {
     setBusy(true)
     setError(null)
     try {
-      await deliveryOrderService.deliver(delivery.id, pin)
+      const collected = cash?.orderId === delivery.id ? cash.amount : null
+      await deliveryOrderService.deliver(delivery.id, pin, collected)
       setCompleted({ ...delivery, status: 'DELIVERED', deliveredAt: new Date().toISOString() })
       setPin('')
+      setCash(null)
       refreshActiveDeliveries()
     } catch (err) {
       showErrorToast(err)
@@ -141,6 +147,12 @@ export default function ActiveDeliveryPage() {
   const canPickUp = !!delivery.foodReady && photoCount > 0
   const totalItems = delivery.items.reduce((sum, item) => sum + item.quantity, 0)
   const isCod = paymentLabel(delivery.paymentMode) === 'COD'
+  const cashDue = delivery.payable ?? 0
+  const cashCollected = cash?.orderId === delivery.id ? cash.amount : null
+  // Flow at the door: arrived -> handover photo -> (COD) cash collection -> PIN -> delivered.
+  const needsCash = isCod && cashCollected == null
+  const cashDialogOpen =
+    delivery.status === 'ARRIVED' && isCod && deliveryPhotoCount > 0 && (cashDialog?.orderId === delivery.id ? cashDialog.open : cashCollected == null)
 
   return (
     <div>
@@ -211,10 +223,15 @@ export default function ActiveDeliveryPage() {
               <span className="flex h-8 w-8 items-center justify-center rounded-full bg-brand-100 text-brand-600 dark:bg-brand-500/15">
                 <Store size={16} />
               </span>
-              <span className="my-1 h-8 w-px border-l border-dashed border-slate-200 dark:border-slate-700" />
-              <span className="flex h-8 w-8 items-center justify-center rounded-full bg-rose-100 text-rose-600 dark:bg-rose-500/15">
-                <MapPin size={16} />
-              </span>
+              {/* The drop point only once the food is picked up - the server doesn't share the address before that. */}
+              {delivery.customerAddress && (
+                <>
+                  <span className="my-1 h-8 w-px border-l border-dashed border-slate-200 dark:border-slate-700" />
+                  <span className="flex h-8 w-8 items-center justify-center rounded-full bg-rose-100 text-rose-600 dark:bg-rose-500/15">
+                    <MapPin size={16} />
+                  </span>
+                </>
+              )}
             </div>
             <div className="flex-1 space-y-4">
               <div>
@@ -222,18 +239,20 @@ export default function ActiveDeliveryPage() {
                 <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">{delivery.restaurantName}</p>
                 <p className="text-xs text-slate-500 dark:text-slate-400">{delivery.restaurantAddress}</p>
               </div>
-              <div>
-                <p className="text-[11px] font-medium uppercase tracking-wide text-slate-400">Drop</p>
-                <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">{delivery.customerName}</p>
-                <p className="text-xs text-slate-500 dark:text-slate-400">{delivery.customerAddress}</p>
-              </div>
+              {delivery.customerAddress && (
+                <div>
+                  <p className="text-[11px] font-medium uppercase tracking-wide text-slate-400">Drop</p>
+                  <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">{delivery.customerName}</p>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">{delivery.customerAddress}</p>
+                </div>
+              )}
             </div>
           </div>
         </div>
 
         <div className="grid grid-cols-2 gap-3">
           <a
-            href={isHeadingToRestaurant ? mapsUrl(delivery.restaurantLat, delivery.restaurantLng) : mapsUrl(delivery.customerLat, delivery.customerLng)}
+            href={isHeadingToRestaurant || delivery.customerLat == null || delivery.customerLng == null ? mapsUrl(delivery.restaurantLat, delivery.restaurantLng) : mapsUrl(delivery.customerLat, delivery.customerLng)}
             target="_blank"
             rel="noreferrer"
             className="btn-secondary flex items-center justify-center gap-2"
@@ -241,7 +260,7 @@ export default function ActiveDeliveryPage() {
             <Navigation size={16} /> {isHeadingToRestaurant ? 'Go to restaurant' : 'Go to customer'}
           </a>
           <a
-            href={`tel:${isHeadingToRestaurant ? delivery.restaurantContactNumber : delivery.customerPhone}`}
+            href={`tel:${isHeadingToRestaurant || !delivery.customerPhone ? delivery.restaurantContactNumber : delivery.customerPhone}`}
             className="btn-secondary flex items-center justify-center gap-2"
           >
             <Phone size={16} /> Call
@@ -350,22 +369,63 @@ export default function ActiveDeliveryPage() {
               </span>
             </Link>
             {deliveryPhotoCount === 0 && <p className="text-xs text-slate-500 dark:text-slate-400">Take a photo as you hand over the order before confirming delivery.</p>}
-            <p className="text-sm font-medium text-slate-700 dark:text-slate-200">Ask the customer for their delivery PIN</p>
-            <TextInput
-              value={pin}
-              onChange={(e) => setPin(e.target.value.replace(/\D/g, '').slice(0, 4))}
-              placeholder="1234"
-              inputMode="numeric"
-              maxLength={4}
-              className="text-center text-xl tracking-[0.5em]"
-            />
+            {isCod && deliveryPhotoCount > 0 && (
+              <button
+                type="button"
+                onClick={() => setCashDialog({ orderId: delivery.id, open: true })}
+                className={`flex w-full items-center justify-between rounded-xl border px-3 py-3 text-sm font-semibold ${
+                  cashCollected != null
+                    ? 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-400'
+                    : 'border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-300'
+                }`}
+              >
+                <span className="flex items-center gap-2">
+                  <Banknote size={18} /> {cashCollected != null ? `Cash collected ${formatCurrency(cashCollected)}` : `Collect ${formatCurrency(cashDue)} in cash`}
+                </span>
+                <span className="text-xs">{cashCollected != null ? (cashCollected > cashDue ? `+${formatCurrency(cashCollected - cashDue)} to wallet · Change` : 'Change') : 'Confirm'}</span>
+              </button>
+            )}
+            {deliveryPhotoCount > 0 && !needsCash && (
+              <>
+                <p className="text-sm font-medium text-slate-700 dark:text-slate-200">Ask the customer for their delivery PIN</p>
+                <TextInput
+                  value={pin}
+                  onChange={(e) => setPin(e.target.value.replace(/\D/g, '').slice(0, 4))}
+                  placeholder="1234"
+                  inputMode="numeric"
+                  maxLength={4}
+                  className="text-center text-xl tracking-[0.5em]"
+                />
+              </>
+            )}
             <SwipeToAcceptButton
               key={`deliver-${delivery.id}`}
-              label={busy ? 'Confirming...' : deliveryPhotoCount === 0 ? 'Take a photo first' : pin.length !== 4 ? 'Enter the 4-digit PIN' : 'Slide to confirm delivery'}
+              label={
+                busy
+                  ? 'Confirming...'
+                  : deliveryPhotoCount === 0
+                    ? 'Take a photo first'
+                    : needsCash
+                      ? 'Confirm the cash first'
+                      : pin.length !== 4
+                        ? 'Enter the 4-digit PIN'
+                        : 'Slide to confirm delivery'
+              }
               doneLabel="Delivered!"
               onAccept={handleDeliver}
-              disabled={busy || pin.length !== 4 || deliveryPhotoCount === 0}
+              disabled={busy || pin.length !== 4 || deliveryPhotoCount === 0 || needsCash}
             />
+            {cashDialogOpen && (
+              <CashCollectionDialog
+                due={cashDue}
+                initial={cashCollected}
+                onConfirm={(amount) => {
+                  setCash({ orderId: delivery.id, amount })
+                  setCashDialog({ orderId: delivery.id, open: false })
+                }}
+                onClose={() => setCashDialog({ orderId: delivery.id, open: false })}
+              />
+            )}
           </div>
         )}
       </div>

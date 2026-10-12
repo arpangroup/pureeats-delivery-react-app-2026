@@ -108,16 +108,46 @@ export function paymentLabel(mode: string | null | undefined): 'COD' | 'Prepaid'
 
 export const MAX_PICKUP_PHOTOS = 3
 
+/** Mock mode: orders dismissed this session. */
+const mockDismissed = new Set<number>()
+
+/**
+ * Orders dismissed on this device: order id -> the offer round dismissed. Hidden from every available-orders list at
+ * once (the server hides them too, but a screen already showing the list kept it until its next refresh), until the
+ * order is offered again in a later round.
+ */
+const dismissedRounds = new Map<number, number>()
+
+/** Fired after a dismiss so screens showing the available orders re-read them. */
+export const AVAILABLE_ORDERS_CHANGED = 'pureeats:available-orders-changed'
+
+function hiddenByDismissal(o: AvailableOrder): boolean {
+  const round = dismissedRounds.get(o.id)
+  return round != null && (o.offerRound ?? 1) <= round
+}
+
 export const deliveryOrderService = {
   async listAvailable(): Promise<AvailableOrder[]> {
     if (IS_MOCK) {
       await mockDelay(200)
       purgeStale()
       maybeAdmitNewOrder()
-      return [...visibleOrders].sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1))
+      return [...visibleOrders].filter((o) => !mockDismissed.has(o.id)).sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1))
     }
     const { data } = await apiClient.get<{ data: AvailableOrder[] }>('/delivery/orders/available')
-    return (data.data ?? []).map(normalizeAvailable)
+    return (data.data ?? []).map(normalizeAvailable).filter((o) => !hiddenByDismissal(o))
+  },
+
+  /** Not interested: the order disappears from this partner's available orders until it's offered again. */
+  async dismiss(orderId: number, offerRound = 1): Promise<void> {
+    dismissedRounds.set(orderId, Math.max(offerRound, dismissedRounds.get(orderId) ?? 0))
+    window.dispatchEvent(new window.Event(AVAILABLE_ORDERS_CHANGED))
+    if (IS_MOCK) {
+      await mockDelay(100)
+      mockDismissed.add(orderId)
+      return
+    }
+    await apiClient.post(`/delivery/orders/${orderId}/dismiss`)
   },
 
   async accept(orderId: number): Promise<ActiveDelivery> {
@@ -270,12 +300,16 @@ export const deliveryOrderService = {
   },
 
   /** Completes the delivery. The caller already holds the ActiveDelivery and flips it to DELIVERED itself. */
-  async deliver(orderId: number, deliveryPin: string): Promise<void> {
+  /** @param cashCollected cash on delivery: what the customer handed over (at least the amount due; the extra goes to their wallet). */
+  async deliver(orderId: number, deliveryPin: string, cashCollected?: number | null): Promise<void> {
     if (IS_MOCK) {
       await mockDelay(300)
       if (!currentActive || currentActive.id !== orderId) throw { message: 'No active delivery matches this order.' }
       if (currentActive.status !== 'ARRIVED') throw { message: "Mark that you've reached the customer's location first." }
       if (mockPhotos.delivery.length === 0) throw { message: 'Take a photo of the order being handed over before confirming delivery.' }
+      if (paymentLabel(currentActive.paymentMode) === 'COD' && (cashCollected == null || cashCollected < (currentActive.payable ?? 0))) {
+        throw { message: 'Confirm how much cash you collected from the customer.' }
+      }
       if (deliveryPin !== MOCK_DELIVERY_PIN) throw { message: `Incorrect PIN. Ask the customer to read out their delivery PIN (mock mode: ${MOCK_DELIVERY_PIN}).` }
       const delivered: ActiveDelivery = { ...currentActive, status: 'DELIVERED', deliveredAt: new Date().toISOString() }
       sessionHistory.unshift({
@@ -283,7 +317,7 @@ export const deliveryOrderService = {
         uniqueOrderId: delivered.uniqueOrderId,
         status: 'DELIVERED',
         restaurantName: delivered.restaurantName,
-        customerAddress: delivered.customerAddress,
+        customerAddress: delivered.customerAddress ?? '',
         payoutEstimate: delivered.payoutEstimate,
         distanceKm: delivered.distanceKm,
         createdAt: delivered.createdAt,
@@ -292,7 +326,7 @@ export const deliveryOrderService = {
       currentActive = null
       return
     }
-    await apiClient.post(`/delivery/orders/${orderId}/deliver`, { deliveryPin })
+    await apiClient.post(`/delivery/orders/${orderId}/deliver`, { deliveryPin, cashCollected: cashCollected ?? null })
   },
 
   /**

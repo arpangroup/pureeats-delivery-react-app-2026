@@ -3,13 +3,13 @@ import { mockDelay, nextMockId } from '@/lib/mockUtils'
 import { IS_MOCK } from '@/config/env'
 import { users } from '@/mocks/fixtures/users'
 import { riderProfilesByUserId } from '@/mocks/fixtures/riderProfile'
-import type { Gender, PartnerApplication, RiderProfile } from '@/types/entities'
+import type { DocType, Gender, PartnerApplication, RiderDocument, RiderProfile } from '@/types/entities'
 
 /** One group of document/payout fields to change (only what's sent changes). */
 export interface DocumentChanges {
   licenseNumber?: string
-  idProofType?: 'AADHAAR' | 'PAN'
-  idProofNumber?: string
+  aadhaarNumber?: string
+  panNumber?: string
   vehicleType?: 'BIKE' | 'CYCLE' | 'EV'
   payoutMethod?: 'BANK' | 'UPI'
   bankAccountHolder?: string
@@ -26,6 +26,27 @@ export interface RiderProfileInput {
   description: string
   photo?: File | null
 }
+
+export const DOC_LABELS: Record<DocType | 'PHOTO', string> = {
+  LICENSE: 'Driving licence photo',
+  AADHAAR_FRONT: 'Aadhaar (front)',
+  AADHAAR_BACK: 'Aadhaar (back)',
+  PAN: 'PAN card',
+  RC: 'Vehicle RC',
+  PASSBOOK: 'Bank passbook / cancelled cheque',
+  PHOTO: 'Your photo',
+}
+
+function mergeMockDocuments(existing: RiderDocument[], files: Partial<Record<DocType, File>>): RiderDocument[] {
+  const byType = new Map(existing.map((d) => [d.type, d]))
+  for (const [type, file] of Object.entries(files) as [DocType, File][]) {
+    if (file) byType.set(type, { type, label: DOC_LABELS[type], url: URL.createObjectURL(file), contentType: file.type, uploadedAt: new Date().toISOString() })
+  }
+  return [...byType.values()]
+}
+
+/** Everything but the last 4 characters hidden, like the server's masking. */
+const maskTail = (v: string) => v.slice(-4).padStart(v.length, 'X')
 
 export const riderProfileService = {
   async getMyProfile(userId: number): Promise<RiderProfile | null> {
@@ -108,15 +129,21 @@ export const riderProfileService = {
 
   /**
    * Applies to become a delivery partner (or resubmits after a rejection): licence, ID proof, vehicle and
-   * payout details, then the licence photo. The application waits for admin approval (status PENDING).
+   * payout details, then the photo and every chosen document. The application waits for admin approval (PENDING).
    */
-  async submitApplication(userId: number, application: PartnerApplication, licensePhoto: File | null, resubmit: boolean, profilePhoto: File | null = null): Promise<RiderProfile> {
+  async submitApplication(
+    userId: number,
+    application: PartnerApplication,
+    documents: Partial<Record<DocType, File>>,
+    resubmit: boolean,
+    profilePhoto: File | null = null,
+  ): Promise<RiderProfile> {
     const body = {
       name: application.name.trim(),
       vehicleNumber: application.vehicleNumber.trim(),
       licenseNumber: application.licenseNumber,
-      idProofType: application.idProofType,
-      idProofNumber: application.idProofNumber,
+      aadhaarNumber: application.aadhaarNumber,
+      panNumber: application.panNumber,
       vehicleType: application.vehicleType,
       payoutMethod: application.payoutMethod,
       bankAccountHolder: application.payoutMethod === 'BANK' ? application.bankAccountHolder : null,
@@ -137,10 +164,12 @@ export const riderProfileService = {
         approvalStatus: 'PENDING',
         rejectionReason: null,
         licenseNumber: body.licenseNumber,
-        licensePhotoUrl: licensePhoto ? URL.createObjectURL(licensePhoto) : riderProfilesByUserId[userId]?.licensePhotoUrl ?? null,
+        licensePhotoUrl: documents.LICENSE ? URL.createObjectURL(documents.LICENSE) : riderProfilesByUserId[userId]?.licensePhotoUrl ?? null,
+        documents: mergeMockDocuments(riderProfilesByUserId[userId]?.documents ?? [], documents),
+        missingDocuments: [],
         photo: profilePhoto ? URL.createObjectURL(profilePhoto) : riderProfilesByUserId[userId]?.photo ?? null,
-        idProofType: body.idProofType,
-        idProofNumberMasked: body.idProofNumber.slice(-4).padStart(body.idProofNumber.length, 'X'),
+        aadhaarNumberMasked: maskTail(body.aadhaarNumber.replace(/\s/g, '')),
+        panNumberMasked: maskTail(body.panNumber.toUpperCase()),
         vehicleType: body.vehicleType,
         payoutMethod: body.payoutMethod,
         upiId: body.upiId,
@@ -176,16 +205,42 @@ export const riderProfileService = {
         throw { message: `Your details are saved, but your ${label} didn't upload${reason && reason !== 'Network Error' ? ` (${reason})` : ''}. Tap Submit again to retry.` }
       }
     }
-    if (licensePhoto) await upload('/users/me/rider-profile/license-photo', licensePhoto, 'licence photo')
     if (profilePhoto) await upload('/users/me/rider-profile/photo', profilePhoto, 'photo')
+    for (const [type, file] of Object.entries(documents) as [DocType, File][]) {
+      if (file) await upload(`/users/me/rider-profile/documents/${type}`, file, DOC_LABELS[type])
+    }
     return saved
+  },
+
+  /** One document (photo or PDF) - e.g. one that was missing after the application was sent. */
+  async uploadDocument(profile: RiderProfile, type: DocType, file: File): Promise<RiderProfile> {
+    if (IS_MOCK) {
+      await mockDelay()
+      const updated: RiderProfile = {
+        ...profile,
+        documents: mergeMockDocuments(profile.documents ?? [], { [type]: file }),
+        missingDocuments: (profile.missingDocuments ?? []).filter((d) => d !== type),
+      }
+      riderProfilesByUserId[profile.userId] = updated
+      return updated
+    }
+    const form = new FormData()
+    form.append('file', file)
+    const { data } = await apiClient.post<{ data: RiderProfile }>(`/users/me/rider-profile/documents/${type}`, form)
+    return data.data
   },
 
   /** Changes one group of documents/payout details - allowed only when Settings -> Profile editing permits it. */
   async updateDocuments(profile: RiderProfile, changes: DocumentChanges): Promise<RiderProfile> {
     if (IS_MOCK) {
       await mockDelay()
-      const updated: RiderProfile = { ...profile, ...changes, idProofNumberMasked: changes.idProofNumber ? changes.idProofNumber.slice(-4).padStart(changes.idProofNumber.length, 'X') : profile.idProofNumberMasked }
+      const { aadhaarNumber, panNumber, ...rest } = changes
+      const updated: RiderProfile = {
+        ...profile,
+        ...rest,
+        aadhaarNumberMasked: aadhaarNumber ? maskTail(aadhaarNumber.replace(/\s/g, '')) : profile.aadhaarNumberMasked,
+        panNumberMasked: panNumber ? maskTail(panNumber.toUpperCase()) : profile.panNumberMasked,
+      }
       riderProfilesByUserId[profile.userId] = updated
       return updated
     }

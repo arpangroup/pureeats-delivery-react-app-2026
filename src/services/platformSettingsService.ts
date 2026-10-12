@@ -11,18 +11,18 @@ export interface PlatformSettings {
   orderAlertSoundUrl: string | null
   /** Settings -> Delivery Application -> Order screens: show the partner's payout on order screens (off by default). */
   showPayout: boolean
+  /** Settings -> Delivery Application -> Wallet: show how each earning was calculated - commission %, what it applies to (off by default). */
+  showEarningBreakdown: boolean
   /** Settings -> Delivery Application -> Profile editing: which profile fields the partner may change (all off by default). */
   profileEditable: Record<ProfileField, boolean>
 }
 
-export type ProfileField = 'name' | 'vehicleNumber' | 'age' | 'gender' | 'about' | 'phone' | 'email' | 'license' | 'idProof' | 'vehicleType' | 'payout'
+export type ProfileField = 'name' | 'vehicleNumber' | 'photo' | 'phone' | 'email' | 'license' | 'idProof' | 'vehicleType' | 'payout'
 
 const PROFILE_KEYS: Record<ProfileField, string> = {
   name: 'driver_edit_name',
   vehicleNumber: 'driver_edit_vehicle_number',
-  age: 'driver_edit_age',
-  gender: 'driver_edit_gender',
-  about: 'driver_edit_about',
+  photo: 'driver_edit_photo',
   phone: 'driver_edit_phone',
   email: 'driver_edit_email',
   license: 'driver_edit_license',
@@ -34,9 +34,7 @@ const PROFILE_KEYS: Record<ProfileField, string> = {
 const LOCKED: Record<ProfileField, boolean> = {
   name: false,
   vehicleNumber: false,
-  age: false,
-  gender: false,
-  about: false,
+  photo: false,
   phone: false,
   email: false,
   license: false,
@@ -45,13 +43,13 @@ const LOCKED: Record<ProfileField, boolean> = {
   payout: false,
 }
 
-const DEFAULTS: PlatformSettings = { locationTrackingEnabled: true, orderAlertSoundUrl: null, showPayout: false, profileEditable: LOCKED }
+const DEFAULTS: PlatformSettings = { locationTrackingEnabled: true, orderAlertSoundUrl: null, showPayout: false, showEarningBreakdown: false, profileEditable: LOCKED }
 
 /** Mock mode: payout shown and the profile editable so every screen can be demoed. */
 const MOCK_SETTINGS: PlatformSettings = {
   ...DEFAULTS,
   showPayout: true,
-  profileEditable: { ...LOCKED, name: true, vehicleNumber: true, age: true, gender: true, about: true },
+  profileEditable: { ...LOCKED, name: true, vehicleNumber: true, photo: true },
 }
 
 let latest: PlatformSettings = DEFAULTS
@@ -85,6 +83,7 @@ export const platformSettingsService = {
         locationTrackingEnabled: tracking == null || tracking === 'true',
         orderAlertSoundUrl: sound && sound.trim() ? sound.trim() : null,
         showPayout: flags.driver_show_payout === 'true',
+        showEarningBreakdown: flags.driver_show_earning_breakdown === 'true',
         profileEditable: Object.fromEntries(
           (Object.keys(PROFILE_KEYS) as ProfileField[]).map((f) => [f, flags[PROFILE_KEYS[f]] === 'true']),
         ) as Record<ProfileField, boolean>,
